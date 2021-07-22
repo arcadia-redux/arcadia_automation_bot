@@ -86,7 +86,7 @@ class Github(commands.Cog, name="Github"):
         callback = self.reply_processors.get(reply_command.lower(), None)
 
         if callback:
-            status = await callback(repo, issue_id, args)
+            status = await callback(message, repo, issue_id, args)
         else:
             if message.attachments:
                 body += await process_attachments_contextless(
@@ -101,21 +101,29 @@ class Github(commands.Cog, name="Github"):
             )
         await message.add_reaction("✅" if status else "🚫")
 
-    async def _reply_assign(self, repo: str, issue_id: str, assignees: List[str]) -> bool:
+    async def _reply_assign(self, message: Message, repo: str, issue_id: str, assignees: List[str]) -> bool:
         for i, assignee in enumerate(assignees):
             if assignee.startswith("<"):
                 assignees[i] = await self.bot.redis.hget(
                     "github_mention", assignee.replace("!", ""), encoding='utf8'
                 )
+                if not assignees[i]:
+                    await message.reply(
+                        f"**Warning**: Github name for {assignee} is unknown.\n"
+                        f"Consider adding it via `$add_github_name @mention github_username`"
+                    )
+        assignees = list(filter(None, assignees))
+        if not assignees:
+            return False
         status, _ = await assign_issue(self.bot.session, repo, issue_id, assignees)
         return status
 
-    async def _reply_close(self, repo: str, issue_id: str, reason: List[str]) -> bool:
+    async def _reply_close(self, message: Message, repo: str, issue_id: str, reason: List[str]) -> bool:
         status, _ = await comment_issue(self.bot.session, repo, issue_id, " ".join(reason))
         status, _ = await close_issue(self.bot.session, repo, issue_id)
         return status
 
-    async def _reply_label(self, repo: str, issue_id: str, labels_base: List[str]) -> bool:
+    async def _reply_label(self, message: Message, repo: str, issue_id: str, labels_base: List[str]) -> bool:
         labels_final = []
         _reading_complex_label = False
         _complex_label = ""
@@ -134,11 +142,23 @@ class Github(commands.Cog, name="Github"):
                 _complex_label += m_label
             else:
                 labels_final.append(m_label)
+        status, repo_labels = await get_repo_labels(self.bot.session, repo)
+        if status:
+            labels_final_set = set(labels_final)
+            repo_label_names = set({label["name"] for label in repo_labels})
+            labels_final = list(labels_final_set.intersection(repo_label_names))
+            labels_missing = labels_final_set - repo_label_names
+            if labels_missing:
+                await message.reply(
+                    f"**Warning**: Following labels aren't present in target repo and won't be applied:"
+                    f"\n`{', '.join(labels_missing)}`"
+                )
+            if not labels_final:
+                return False
         status, _ = await add_labels(self.bot.session, repo, issue_id, labels_final)
         return status
 
-    async def _reply_milestone(self, repo: str, issue_id: str, milestones: List[str]) -> bool:
-        logger.info(f"{milestones=}")
+    async def _reply_milestone(self, repo: str, message: Message, issue_id: str, milestones: List[str]) -> bool:
         status, _ = await set_issue_milestone(self.bot.session, repo, issue_id, " ".join(milestones).replace('"', ''))
         return status
 
