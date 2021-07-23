@@ -194,7 +194,8 @@ class Github(commands.Cog, name="Github"):
 
             processed_text_content = "\n".join(resulting_text_lines)
 
-        final_text_content = f"In response to your feedback message:\n>\t{feedback_text}\n\n{processed_text_content}"
+        final_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
+                             f"<br><br>{processed_text_content}"
 
         mail_data = {
             "targetSteamId": steam_id,
