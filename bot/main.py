@@ -41,13 +41,6 @@ SERVER_LINKS = {
     "WarMasters": "https://api.warmasters.dota2unofficial.com/",
 }
 
-langs = {
-    "addon_english": "English",
-    "addon_russian": "Russian",
-    "addon_tchinese": "T. Chinese",
-    "addon_schinese": "S. Chinese"
-}
-
 custom_game_names: Final[Dict[str, Any]] = {key: None for key in SERVER_LINKS.keys()}
 bot.report_channels = custom_game_names.copy()
 bot.chat_channels = custom_game_names.copy()
@@ -233,12 +226,25 @@ async def on_command_error(context, err):
 async def send_queued_chat_messages():
     for custom_game, queue in bot.queued_chat_messages.items():
         if queue and len(queue) > 0:
+            current_msg_len = 0
+
             channel = bot.chat_channels.get(custom_game, None)
             if not channel:
                 continue
+
             compound_message = []
+
             for message in queue:
-                compound_message.append(f"[{message['time']}] **<{message['name']}>**: {message['text']}")
+                built_string = f"[{message['time']}] **<{message['name']}>**: {message['text']}"
+                current_msg_len += len(built_string)
+                compound_message.append(built_string)
+
+                if current_msg_len >= 1600:
+                    print(f"compound message length exceeded limit: {current_msg_len} / 1600")
+                    await channel.send("\n".join(compound_message))
+                    compound_message = []
+                    current_msg_len = 0
+            print(f"compound message length: {current_msg_len}")
             await channel.send("\n".join(compound_message))
         bot.queued_chat_messages[custom_game] = []
 
