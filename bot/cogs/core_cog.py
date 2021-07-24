@@ -3,6 +3,7 @@ from discord import Game, Embed, Member
 from loguru import logger
 from datetime import datetime
 from croniter import croniter
+from typing import Optional
 
 
 class Core(commands.Cog, name="Core"):
@@ -65,18 +66,21 @@ class Core(commands.Cog, name="Core"):
     @commands.command()
     @commands.has_permissions(manage_messages=True)
     @logger.catch
-    async def assign(self, context: commands.Context, custom_game_name: str):
+    async def assign(self, context: commands.Context, custom_game_name: str, ch_type: Optional[str] = "report"):
         if not context.message.author.guild_permissions.administrator:
             return
         executor = context.bot.redis.multi_exec()
-        executor.set(f"{custom_game_name}-report-channel-id", context.channel.id)
-        executor.set(f"{custom_game_name}-report-channel-name", context.channel.name)
+        executor.set(f"{custom_game_name}-{ch_type}-channel-id", context.channel.id)
+        executor.set(f"{custom_game_name}-{ch_type}-channel-name", context.channel.name)
         state_1, state_2 = await executor.execute()
 
-        context.bot.report_channels[custom_game_name] = context.channel
+        if ch_type == "report":
+            context.bot.report_channels[custom_game_name] = context.channel
+        elif ch_type == "chat":
+            context.bot.chat_channels[custom_game_name] = context.channel
 
         if state_1 and state_2:
-            await context.channel.send(f"Successfully set report channel of {custom_game_name} "
+            await context.channel.send(f"Successfully set {ch_type} channel of {custom_game_name} "
                                        f"to <{context.channel.id}>{context.channel.name}")
             return
         await context.channel.send(f"Something went wrong! Status codes: {state_1}:{state_2}")

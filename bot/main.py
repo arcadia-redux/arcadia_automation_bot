@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import json
 import os
-from typing import Final
+from typing import Final, Dict, Any
 
 from .__load_env import LOCALS_IMPORTED  # True if imported local .env file
 
@@ -10,7 +10,7 @@ import aiohttp
 import aioredis
 import discord
 from aioredis.pubsub import Receiver
-from discord.ext import commands
+from discord.ext import commands, tasks
 from loguru import logger
 
 from .cogs import github_cog, core_cog
@@ -48,7 +48,10 @@ langs = {
     "addon_schinese": "S. Chinese"
 }
 
-bot.report_channels = {key: None for key in SERVER_LINKS.keys()}
+custom_game_names: Final[Dict[str, Any]] = {key: None for key in SERVER_LINKS.keys()}
+bot.report_channels = custom_game_names.copy()
+bot.chat_channels = custom_game_names.copy()
+bot.queued_chat_messages = custom_game_names.copy()
 bot.translation_channel = None
 
 webapi_key = os.getenv("WEBAPI_KEY")
@@ -76,21 +79,36 @@ async def on_ready():
         executor.get(f"{custom_game}-report-channel-name")
         ch_id, name = await executor.execute()
 
-        logger.info(f"[{custom_game}] Assigned report channel: {ch_id}:{name}")
         if ch_id and name:
+            logger.info(f"[{custom_game}] Assigned report channel: {ch_id}:{name}")
             bot.report_channels[custom_game] = bot.get_channel(int(ch_id))
+
+    for custom_game in bot.chat_channels.keys():
+        executor = bot.redis.multi_exec()
+        executor.get(f"{custom_game}-chat-channel-id")
+        executor.get(f"{custom_game}-chat-channel-name")
+        ch_id, name = await executor.execute()
+
+        if ch_id and name:
+            logger.info(f"[{custom_game}] Assigned chat channel: {ch_id}:{name}")
+            bot.chat_channels[custom_game] = bot.get_channel(int(ch_id))
 
     receiver = Receiver()
 
     @logger.catch
     async def reader(channel):
         async for ch, message in channel.iter():
-            await send_suggestion(message[1])
+            if ch.name == b'suggestions:*':
+                await send_suggestion(message[1])
+            elif ch.name == b'chat:*':
+                await queue_chat_message(message[1])
         logger.info("finished reading!")
 
     bot.task = asyncio.ensure_future(reader(receiver))
     await bot.redis.psubscribe(receiver.pattern('suggestions:*'))
+    await bot.redis.psubscribe(receiver.pattern('chat:*'))
 
+    send_queued_chat_messages.start()
     __BOT_STATE = BotState.SET
     logger.info(f"[Ready] Finished")
 
@@ -101,7 +119,7 @@ async def state(ctx):
 
 
 @logger.catch
-async def send_suggestion(message):
+async def send_suggestion(message: bytes):
     decoded = json.loads(message)
     custom_game = decoded["custom_game"]
     steam_id = decoded["steam_id"]
@@ -153,13 +171,46 @@ async def send_suggestion(message):
     await report_channel.send(embed=embed)
 
 
+async def queue_chat_message(message: bytes):
+    decoded = json.loads(message)
+    custom_game = decoded["custom_game"]
+    if custom_game not in bot.queued_chat_messages:
+        bot.queued_chat_messages[custom_game] = []
+    bot.queued_chat_messages[custom_game].append(decoded)
+
+
 @bot.event
 @commands.has_permissions(manage_messages=True)
-async def on_message(message):
+async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
     message_text = message.content
+
+    channel = message.channel
+
+    if not message_text.startswith(PREFIX):
+        for custom_game, m_channel in bot.chat_channels.items():
+            if not m_channel or channel.id != m_channel.id:
+                continue
+
+            logger.info(f"[Chat] raw message in chat channel of {custom_game} : {message_text}")
+
+            backend_link = SERVER_LINKS.get(custom_game, None)
+            if not backend_link:
+                continue
+            # process chat message sending
+            # backend_link = "http://127.0.0.1:5000/"
+            resp = await bot.session.post(f"{backend_link}api/lua/match/send_dev_chat_message", json={
+                "steamId": -1,
+                "customGame": custom_game,
+                "steamName": message.author.name,
+                "text": message_text
+            })
+            if resp.status >= 400:
+                await message.add_reaction("🚫")
+            return
+
     if not message_text.startswith(PREFIX) or bot.get_cog("Core").reserved(message_text):
         await bot.process_commands(message)
         return
@@ -176,6 +227,20 @@ async def on_message(message):
 @logger.catch
 async def on_command_error(context, err):
     logger.error(f"[ON_COMMAND] {err.args!r}")
+
+
+@tasks.loop(seconds=5, reconnect=True)
+async def send_queued_chat_messages():
+    for custom_game, queue in bot.queued_chat_messages.items():
+        if queue and len(queue) > 0:
+            channel = bot.chat_channels.get(custom_game, None)
+            if not channel:
+                continue
+            compound_message = []
+            for message in queue:
+                compound_message.append(f"[{message['time']}] **<{message['name']}>**: {message['text']}")
+            await channel.send("\n".join(compound_message))
+        bot.queued_chat_messages[custom_game] = []
 
 
 bot.run(token)
