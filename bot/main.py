@@ -148,7 +148,7 @@ async def send_suggestion(message: bytes):
         url=f"https://steamcommunity.com/profiles/{steam_id}",
         icon_url=profile_avatar_link or ""
     )
-    if translated:
+    if translated and language != "en":
         embed.add_field(name=f"Translation from **{language.upper()}**", value=f"```{translated}```")
 
     if custom_game == "CustomHeroClash" and steam_id:
@@ -187,7 +187,13 @@ async def on_message(message: discord.Message):
             if not m_channel or channel.id != m_channel.id:
                 continue
 
-            logger.info(f"[Chat] raw message in chat channel of {custom_game} : {message_text}")
+            tl_prefix = message_text.lower()[0:3]
+            if tl_prefix == "cn:" or tl_prefix == "cn ":
+                message_text, detected_language = await translate_single(message_text[3:], "zh-CN")
+                await message.reply(f"Sent translated to chinese: {message_text}")
+            if tl_prefix == "ru:" or tl_prefix == "ru ":
+                message_text, detected_language = await translate_single(message_text[3:], "ru")
+                await message.reply(f"Sent translated to russian: {message_text}")
 
             backend_link = SERVER_LINKS.get(custom_game, None)
             if not backend_link:
