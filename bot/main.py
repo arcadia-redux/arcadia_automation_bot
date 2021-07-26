@@ -15,7 +15,7 @@ from loguru import logger
 
 from .cogs import github_cog, core_cog
 from .enums import BotState
-from .translator import translate
+from .translator import translate_single, translate
 
 PREFIX: Final = "$" if not LOCALS_IMPORTED else "%"
 token = os.getenv("BOT_TOKEN", None)
@@ -120,7 +120,7 @@ async def send_suggestion(message: bytes):
 
     logger.info(f"Message from channel {custom_game} by {steam_id}: {text}")
 
-    translated, language = await translate(text)
+    translated, language = await translate_single(text)
 
     report_channel = bot.report_channels.get(custom_game, None)
     if not report_channel:
@@ -222,7 +222,7 @@ async def on_command_error(context, err):
     logger.error(f"[ON_COMMAND] {err.args!r}")
 
 
-@tasks.loop(seconds=5, reconnect=True)
+@tasks.loop(seconds=10, reconnect=True)
 async def send_queued_chat_messages():
     for custom_game, queue in bot.queued_chat_messages.items():
         if queue and len(queue) > 0:
@@ -234,17 +234,25 @@ async def send_queued_chat_messages():
 
             compound_message = []
 
-            for message in queue:
-                built_string = f"[{message['time']}] **<{message['name']}>**: {message['text']}"
+            messages_content = [message["text"] for message in queue]
+            translated = await translate(messages_content)
+
+            for i, message in enumerate(queue):
+                translation = translated[i]
+                if translation.detected_language_code != "en":
+                    translated_text = f"(TL [**{translation.detected_language_code}**]: {translation.translated_text})"
+                else:
+                    translated_text = ""
+                m_name = f"**<{message['name']}>**" if not message.get("anon", False) else f"*<{message['name']}>*"
+                built_string = f"{message['time']} [{int(message['steam_id']) - 76561197960265728}] {m_name} **:** " \
+                               f"{message['text']} \t {translated_text}"
                 current_msg_len += len(built_string)
                 compound_message.append(built_string)
 
-                if current_msg_len >= 1600:
-                    print(f"compound message length exceeded limit: {current_msg_len} / 1600")
+                if current_msg_len >= 1800:  # actual message length limit is ~2048, but just to be sure
                     await channel.send("\n".join(compound_message))
                     compound_message = []
                     current_msg_len = 0
-            print(f"compound message length: {current_msg_len}")
             await channel.send("\n".join(compound_message))
         bot.queued_chat_messages[custom_game] = []
 
