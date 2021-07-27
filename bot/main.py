@@ -111,6 +111,21 @@ async def state(ctx):
     await ctx.send(__BOT_STATE)
 
 
+@bot.command()
+async def list_users(context: commands.Context):
+    messages = await context.channel.history(limit=10).flatten()
+    users = {}
+    embeds = {}
+    for message in messages:
+        users[message.author.id] = message.author.name
+        embeds[message.id] = message.embeds[0].title if message.embeds and message.embeds[0] and message.embeds[0].title else None
+    titles = "\n".join([f"{_id}: {title}" for _id, title in embeds.items() if title is not None])
+    await context.send(f"""
+    Users: {", ".join([f"{_id}:{user}" for _id, user in users.items()])}
+    Embed titles: {titles}
+    """)
+
+
 @logger.catch
 async def send_suggestion(message: bytes):
     decoded = json.loads(message)
@@ -176,6 +191,14 @@ async def queue_chat_message(message: bytes):
 @commands.has_permissions(manage_messages=True)
 async def on_message(message: discord.Message):
     if message.author.bot:
+        if message.author.id != 682861064517451855 or not message.embeds:
+            return
+        embed = message.embeds[0]
+        if not embed.title:
+            return
+        title = embed.title.lower()
+        if "main success on" in title or "github actions checks success on" in title:
+            await message.delete()
         return
 
     message_text = message.content
