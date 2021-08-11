@@ -1,7 +1,7 @@
 from discord.ext import commands, tasks
 from discord import Game, Embed, Member
 from loguru import logger
-from datetime import datetime
+from datetime import datetime, timedelta
 from croniter import croniter
 from typing import Optional
 
@@ -33,6 +33,61 @@ class Core(commands.Cog, name="Core"):
         return "-report-channel-id" in key or "-report-channel-name" in key
 
     @commands.command()
+    async def mute(self, context: commands.Context, target_steam_id: int, duration: Optional[str]):
+        """
+        Mute player by SteamID32. Duration is optional, defaults to 7 days.
+        Possible duration variants: Nh | Nd | N,  where N is a number, h = hours, d = days, last one is recognised as days
+        """
+        for custom_game, m_channel in self.bot.chat_channels.items():
+            if not m_channel or context.channel.id != m_channel.id:
+                continue
+            target_link = self.bot.server_links.get(custom_game, None)
+            if not target_link:
+                return
+
+            if duration:
+                if duration.isnumeric():
+                    delta = timedelta(days=int(duration))
+                else:
+                    duration_type = duration[1].lower()
+                    if duration_type == "h":
+                        delta = timedelta(hours=int(duration[0]))
+                    elif duration_type == "y":
+                        delta = timedelta(days=int(duration[0]))
+                    else:
+                        delta = timedelta(days=7)
+            else:
+                delta = timedelta(days=7)
+
+            resp = await self.bot.session.post(
+                f"{target_link}api/lua/match/mute_player_in_chat",
+                json={
+                    "steamId": str(target_steam_id + 76561197960265728),
+                    "until": str(datetime.utcnow() + delta),
+                    "customGame": custom_game,
+                }
+            )
+            await context.message.add_reaction("✅" if resp.status < 400 else "🚫")
+
+    @commands.command()
+    async def unmute(self, context: commands.Context, target_steam_id: int):
+        """ Unmutes player by SteamID32 """
+        for custom_game, m_channel in self.bot.chat_channels.items():
+            if not m_channel or context.channel.id != m_channel.id:
+                continue
+            target_link = self.bot.server_links.get(custom_game, None)
+            if not target_link:
+                return
+
+            resp = await self.bot.session.post(
+                f"{target_link}api/lua/match/unmute_player_in_chat",
+                json={
+                    "steamId": str(target_steam_id + 76561197960265728)
+                }
+            )
+            await context.message.add_reaction("✅" if resp.status < 400 else "🚫")
+
+    @commands.command()
     async def season_reset(self, context: commands.Context):
         date = datetime.utcnow()
         cron = croniter("0 0 1 */3 *", date)
@@ -62,6 +117,21 @@ class Core(commands.Cog, name="Core"):
         keys = await context.bot.redis.keys("*")
         commands_list = f"\n".join([key.decode("utf-8") for key in keys])
         await context.send(f"Linked commands:\n```{commands_list}```")
+
+    @commands.command()
+    @commands.has_permissions(manage_messages=True)
+    async def tournament(self, context: commands.Context, state: Optional[str]):
+        if not state:
+            saved_state = await context.bot.redis.get("tournament-mode-state")
+            if saved_state is None:
+                saved_state = "off"
+            else:
+                saved_state = "on" if bool(saved_state) is True else "off"
+            await context.reply(f"Tournament mode state: **{saved_state}**")
+            return
+        new_state = bytes(state == "on")
+        await context.bot.redis.set("tournament-mode-state", new_state)
+        await context.reply(f"Set tournament mode state to **{state}**")
 
     @commands.command()
     @commands.has_permissions(manage_messages=True)

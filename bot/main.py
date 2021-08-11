@@ -62,6 +62,7 @@ async def on_ready():
     pwd = os.getenv("PWD")
     bot.redis = await aioredis.create_redis_pool(url, password=pwd)
     bot.running_local = LOCALS_IMPORTED
+    bot.server_links = SERVER_LINKS
 
     logger.add("exec.log", rotation="1 day", retention="1 week", enqueue=True)
     logger.add("error.log", rotation="1 day", retention="1 week", enqueue=True, level="ERROR")
@@ -272,7 +273,12 @@ async def send_queued_chat_messages():
                     translated_text = f"(TL [**{translation.detected_language_code}**]: {translation.translated_text})"
                 else:
                     translated_text = ""
-                m_name = f"**<{message['name']}>**" if not message.get("anon", False) else f"*<{message['name']}>*"
+                supporter_level = message.get("supporter_level", -1)
+                if not message.get("anon", False):
+                    m_name = f"**<{message['name']} {{{supporter_level}}}>**"
+                else:
+                    m_name = f"*<{message['name']} {{{supporter_level}}}>*"
+
                 built_string = f"{message['time']} [{int(message['steam_id']) - 76561197960265728}] {m_name} **:** " \
                                f"{message['text']} \t {translated_text}"
                 current_msg_len += len(built_string)
