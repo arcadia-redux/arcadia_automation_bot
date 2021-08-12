@@ -26,6 +26,7 @@ preset_repos = {
     "war": "war_masters",
     "bot": "arcadia_automation_bot",
     "conquest": "conquest",
+    "revolt-web": "revolt-webserver"
 }
 
 preset_repos_reverse = {value: key for key, value in preset_repos.items()}

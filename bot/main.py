@@ -39,6 +39,7 @@ SERVER_LINKS = {
     "Dota12v12": "https://api.12v12.dota2unofficial.com/",
     "Overthrow": "https://api.overthrow.dota2unofficial.com/",
     "WarMasters": "https://api.warmasters.dota2unofficial.com/",
+    "ReVolt": "https://api.revolt.dota2unofficial.com/"
 }
 
 custom_game_names: Final[Dict[str, Any]] = {key: None for key in SERVER_LINKS.keys()}

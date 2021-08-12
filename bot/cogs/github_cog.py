@@ -22,7 +22,7 @@ class Github(commands.Cog, name="Github"):
             [["search", "s"], self._search_issues],
             [["assign", "as"], self._assign_to_issue],
         ]
-        self.private_repos = ["reVolt", "custom_hero_clash", "chclash_webserver", "war_masters"]
+        self.private_repos = ["reVolt", "custom_hero_clash", "chclash_webserver", "war_masters", "revolt-webserver"]
 
         self.reply_processors = {
             "assign": self._reply_assign,
