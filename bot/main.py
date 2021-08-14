@@ -35,7 +35,7 @@ bot.add_cog(core_cog.Core(bot))
 
 # ew, hardcode
 SERVER_LINKS = {
-    "CustomHeroClash": "https://chc-2.dota2unofficial.com/",
+    "CustomHeroClash": "https://traefik-chc.dota2unofficial.com/",
     "Dota12v12": "https://api.12v12.dota2unofficial.com/",
     "Overthrow": "https://api.overthrow.dota2unofficial.com/",
     "WarMasters": "https://api.warmasters.dota2unofficial.com/",
