@@ -134,6 +134,7 @@ async def send_suggestion(message: bytes):
     custom_game = decoded["custom_game"]
     steam_id = decoded["steam_id"]
     text = decoded["text"]
+    supporter_level = decoded.get("supporter_level", -1)
 
     logger.info(f"Message from channel {custom_game} by {steam_id}: {text}")
 
@@ -161,7 +162,7 @@ async def send_suggestion(message: bytes):
         description=f'```{decoded["text"].strip()}```',
     )
     embed.set_author(
-        name=profile_name,
+        name=f"{{{supporter_level}}}" + profile_name if supporter_level > -1 else profile_name,
         url=f"https://steamcommunity.com/profiles/{steam_id}",
         icon_url=profile_avatar_link or ""
     )

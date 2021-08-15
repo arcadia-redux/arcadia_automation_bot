@@ -203,7 +203,7 @@ class Github(commands.Cog, name="Github"):
             "attachments": attachments
         }
         result = await self.bot.session.post(
-            "https://chc-2.dota2unofficial.com/api/lua/mail/feedback_reply",
+            "https://traefik-chc.dota2unofficial.com/api/lua/mail/feedback_reply",
             json=mail_data
         )
         await message.add_reaction("✅" if result.status < 400 else "🚫")
