@@ -162,7 +162,7 @@ async def send_suggestion(message: bytes):
         description=f'```{decoded["text"].strip()}```',
     )
     embed.set_author(
-        name=f"{{{supporter_level}}}" + profile_name if supporter_level > -1 else profile_name,
+        name=f"{{{supporter_level}}}  " + profile_name if supporter_level > -1 else profile_name,
         url=f"https://steamcommunity.com/profiles/{steam_id}",
         icon_url=profile_avatar_link or ""
     )
@@ -281,7 +281,8 @@ async def send_queued_chat_messages():
                 else:
                     m_name = f"*<{message['name']} {{{supporter_level}}}>*"
 
-                built_string = f"{message['time']} [{int(message['steam_id']) - 76561197960265728}] {m_name} **:** " \
+                message_time = message['time'] if type(message['time']) == str else f"<t:{int(message['time'])}:R>"
+                built_string = f"{message_time} [{int(message['steam_id']) - 76561197960265728}] {m_name} **:** " \
                                f"{message['text']} \t {translated_text}"
                 current_msg_len += len(built_string)
                 compound_message.append(built_string)
