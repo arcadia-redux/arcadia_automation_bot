@@ -163,7 +163,8 @@ class Github(commands.Cog, name="Github"):
         return status
 
     async def _send_feedback_reply(self, message: Message, replied_message: Message, steam_id: str, text_content: list):
-        feedback_text = replied_message.embeds[0].description.replace("```", "")
+        feedback_embed = replied_message.embeds[0]
+        feedback_text = feedback_embed.description.replace("```", "")
         processed_text_content = ":".join(text_content).strip()
         attachments = {}
         # parse text content to find and process rewards line
@@ -206,7 +207,26 @@ class Github(commands.Cog, name="Github"):
             "https://traefik-chc.dota2unofficial.com/api/lua/mail/feedback_reply",
             json=mail_data
         )
-        await message.add_reaction("✅" if result.status < 400 else "🚫")
+
+        if result.status < 400:
+            replies_index, replies_field = next(
+                ((i, item) for i, item in enumerate(feedback_embed.fields) if item.name == "Replies"), (None, None)
+            )
+
+            reply_message_partial = (processed_text_content[:20] + '...') if len(processed_text_content) > 20 else processed_text_content
+            timestamp = int(datetime.utcnow().timestamp())
+            reply_message_link = f"<t:{timestamp}:R> [{message.author.name} : {reply_message_partial}]({message.jump_url})"
+            if not replies_field:
+                feedback_embed.add_field(name="Replies", value=reply_message_link, inline=False)
+            else:
+                new_value = replies_field.value + f"\n{reply_message_link}"
+                feedback_embed.set_field_at(replies_index, name="Replies", value=new_value, inline=False)
+
+            await message.add_reaction("✅")
+            await replied_message.add_reaction("✉️")
+            await replied_message.edit(embed=feedback_embed)
+        else:
+            await message.add_reaction("🚫")
 
     @commands.command()
     async def test_feedback_sending(self, context: Context, steam_id: str, text: str):
