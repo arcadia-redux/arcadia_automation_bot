@@ -1,10 +1,12 @@
 from base64 import b64encode
 from os import getenv
-from typing import Optional, List, Tuple, Union
-from aiohttp import ClientSession
+from typing import Optional, List, Tuple, Union, Dict, Any
 
+from aiohttp import ClientSession
+from discord import Message
 from discord.ext.commands import Context
 from loguru import logger
+
 from .enums import ApiRequestKind
 
 login = getenv("GITHUB_LOGIN")
@@ -51,13 +53,19 @@ def body_wrap(body: str, context: Context) -> str:
            f"Follow the conversation [here]({context.message.jump_url})"
 
 
+def body_wrap_contextless(body: str, message: Message) -> str:
+    return f"{body if body else ''}\n\nOpened from Discord by " \
+           f"**{message.author.name}#{message.author.discriminator}**\n" \
+           f"Follow the conversation [here]({message.jump_url})"
+
+
 def comment_wrap(body: str, context: Context) -> str:
     return f"{body if body else ''}\n\nComment from Discord by " \
            f"**{context.author.name}#{context.author.discriminator}**\n" \
            f"Follow the conversation [here]({context.message.jump_url})"
 
 
-def comment_wrap_contextless(body: str, message) -> str:
+def comment_wrap_contextless(body: str, message: Message) -> str:
     return f"{body if body else ''}\n\nComment from Discord by " \
            f"**{message.author.name}#{message.author.discriminator}**\n" \
            f"Follow the conversation [here]({message.jump_url})"
@@ -87,12 +95,18 @@ async def close_issue(session: ClientSession, repo: str, issue_id: _Numeric) -> 
     )
 
 
-async def update_issue(context: Context, repo: str, title: str, body: str, issue_id: _Numeric) -> _ApiResponse:
+async def update_issue_title_and_body(context: Context, repo: str, title: str, body: str, issue_id: _Numeric) -> _ApiResponse:
     return await github_api_request(
         context.bot.session, ApiRequestKind.PATCH, f"/repos/arcadia-redux/{repo}/issues/{issue_id}", {
             "title": title,
             "body": body_wrap(body, context),
         }
+    )
+
+
+async def update_issue(session: ClientSession, repo: str, issue_id: _Numeric, fields: Dict[str, Any]) -> _ApiResponse:
+    return await github_api_request(
+        session, ApiRequestKind.PATCH, f"/repos/arcadia-redux/{repo}/issues/{issue_id}", fields
     )
 
 

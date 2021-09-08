@@ -1,5 +1,5 @@
 from discord.ext import commands, tasks
-from discord import colour, Member, Message
+from discord import colour, Member
 import asyncio
 
 from ..github_integration import *
@@ -29,6 +29,8 @@ class Github(commands.Cog, name="Github"):
             "close": self._reply_close,
             "label": self._reply_label,
             "milestone": self._reply_milestone,
+            "title": self._reply_title,
+            "description": self._reply_description,
         }
 
         self.repos_stringified_list = ""
@@ -158,8 +160,20 @@ class Github(commands.Cog, name="Github"):
         status, _ = await add_labels(self.bot.session, repo, issue_id, labels_final)
         return status
 
-    async def _reply_milestone(self, repo: str, message: Message, issue_id: str, milestones: List[str]) -> bool:
+    async def _reply_milestone(self, message: Message, repo: str, issue_id: str, milestones: List[str]) -> bool:
         status, _ = await set_issue_milestone(self.bot.session, repo, issue_id, " ".join(milestones).replace('"', ''))
+        return status
+
+    async def _reply_title(self, message: Message, repo: str, issue_id: str, new_title: List[str]) -> bool:
+        status, _ = await update_issue(self.bot.session, repo, issue_id, {
+            "title": " ".join(new_title),
+        })
+        return status
+
+    async def _reply_description(self, message: Message, repo: str, issue_id: str, new_body: List[str]) -> bool:
+        status, _ = await update_issue(self.bot.session, repo, issue_id, {
+            "body": body_wrap_contextless(" ".join(new_body), message),
+        })
         return status
 
     async def _send_feedback_reply(self, message: Message, replied_message: Message, steam_id: str, text_content: list):
@@ -213,7 +227,8 @@ class Github(commands.Cog, name="Github"):
                 ((i, item) for i, item in enumerate(feedback_embed.fields) if item.name == "Replies"), (None, None)
             )
 
-            reply_message_partial = (processed_text_content[:20] + '...') if len(processed_text_content) > 20 else processed_text_content
+            reply_message_partial = (processed_text_content[:20] + '...') if len(
+                processed_text_content) > 20 else processed_text_content
             timestamp = int(datetime.utcnow().timestamp())
             reply_message_link = f"<t:{timestamp}:R> [{message.author.name} : {reply_message_partial}]({message.jump_url})"
             if not replies_field:
@@ -356,6 +371,8 @@ label: bug "help wanted" enhancement "under review"
 assign: darklordabc SanctusAnimus ZLOY5
 close: duplicate of #12
 milestone: new round progress ui  // case insensitive
+title: New title, set from bot
+description: New description, set from bot
 ```
             """
             embed.add_field(name="Replying", value=reply_description, inline=False)
@@ -435,6 +452,26 @@ milestone: new round progress ui  // case insensitive
     async def _open_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
         title = args[1] if args_len > 1 else None
         body = args[2] if args_len > 2 else ''
+        if args_len > 3:
+            message = await context.reply(
+                f"Way too much arguments passed! "
+                f"**{args_len - 1} / 2** maximum expected arguments for this command.\n"
+                f"React with ✅ to **proceed**, with 🚫 to **cancel**. Issue creation will be cancelled automatically after 60 seconds.\n"
+                f"_Hint: use \" \" to wrap sentences._"
+            )
+            await asyncio.gather(*[message.add_reaction("✅"), message.add_reaction("🚫")])
+
+            expected_reactions = ["✅", "🚫"]
+            _wait_result, reaction_repr = await wait_for_reactions(context, message, expected_reactions)
+            if not _wait_result or not reaction_repr:
+                await context.message.delete()
+                return
+            if reaction_repr == "🚫":
+                await context.message.delete()
+                await message.delete()
+                return
+            await message.delete()
+
         if not title:
             argument = await get_argument(
                 context,
@@ -475,7 +512,7 @@ milestone: new round progress ui  // case insensitive
             if '\n' not in argument:
                 argument += '\n'
             title, body = argument.split("\n")
-        status, details = await update_issue(context, repo, title, body, issue_id)
+        status, details = await update_issue_title_and_body(context, repo, title, body, issue_id)
         if status:
             await context.reply(f"Successfully updated issue #{issue_id}")
         else:

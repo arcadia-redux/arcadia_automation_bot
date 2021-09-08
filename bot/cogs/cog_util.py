@@ -1,12 +1,13 @@
+import io
 from asyncio import TimeoutError
-from typing import Final
-from discord import Embed
+from typing import Final, List
+from uuid import uuid1
+
+from PIL import Image
+from discord import Embed, Message, Reaction
+from discord import File
 from discord.ext.commands import Context
 from loguru import logger
-from PIL import Image
-from discord import File
-from uuid import uuid1
-import io
 
 PAGE_CONTROLS: Final = {"⏮": -1, "⏭": 1}
 
@@ -77,3 +78,27 @@ async def process_attachments_contextless(message, session, attachment_url: str,
             await message.delete()
 
     return f"\n![image]({attachment_url})"
+
+
+async def wait_for_reactions(context: Context, ref_message: Message, expected_reactions: List[str]) -> [bool, str]:
+    """
+        waits for specific user to react with one of the reactions on specified message
+        returns flag of success and index of reaction from passed list
+    """
+
+    def reaction_check(reaction: Reaction, user):
+        return user == context.message.author and str(reaction.emoji) in expected_reactions and reaction.count > 1
+
+    try:
+        reaction, user = await context.bot.wait_for(
+            "reaction_add",
+            check=reaction_check,
+            timeout=60
+        )
+        representation = str(reaction.emoji)
+        if representation not in expected_reactions:
+            return False, ""
+        return True, representation
+    except TimeoutError:
+        await ref_message.delete()
+        return False, ""
