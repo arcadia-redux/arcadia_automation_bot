@@ -59,7 +59,7 @@ async def get_issue_embed(session: ClientSession, data: dict, object_id: str, re
     assignees = ", ".join([f"`{assignee['login']}`" for assignee in data['assignees']])
     milestone = data["milestone"].get("title", None)
     image_link, data["body"] = get_image_link(data["body"])
-    data["body"] = await parse_markdown(session, data["body"], repo_name)
+    data["body"] = await parse_markdown(session, data["body"] or "", repo_name)
     description = [
         f"**Labels**: {labels}" if labels else "",
         f"**Assignees**: {assignees}" if assignees else "",
@@ -104,7 +104,7 @@ async def get_pull_request_embed(session: ClientSession, data: dict, object_id: 
     elif data['mergeable_state'] == "dirty":
         merge_state = "has conflicts"
         color = Colour.dark_orange()
-    data["body"] = await parse_markdown(session, data["body"], repo_name)
+    data["body"] = await parse_markdown(session, data["body"] or "", repo_name)
     description = [
         f"**Labels**: {labels}" if labels else "",
         f"**Assignees**: {assignees}" if assignees else "",
