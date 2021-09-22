@@ -38,9 +38,10 @@ class Github(commands.Cog, name="Github"):
 
         self.repos_stringified_list = ""
         self.url_regex = re.compile(
-            "(https?:\/\/(.+?\.)?github\.com\/arcadia-redux(\/[A-Za-z0-9\-\._~:\/\?#\[\]@!$&'\(\)\*\+,;\=]*)?)"
+            r"(https?:\/\/(.+?\.)?github\.com\/arcadia-redux(\/[A-Za-z0-9\-\._~:\/\?#\[\]@!$&'\(\)\*\+,;\=]*)?)"
         )
-        self.numeric_regex = re.compile('[-+]?\d+')
+        self.numeric_regex = re.compile(r'[-+]?\d+')
+        self.line_pointer_regex = re.compile(r'L\d+')
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -266,6 +267,43 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
 ```
         """.strip())
 
+    @staticmethod
+    def process_object_id(object_id: str) -> [str, str, str]:
+        new_object_id, *rest = object_id.split("#")
+        return new_object_id, *rest[0].split("-")
+
+    async def process_blob_link(self, message: Message, link: str):
+        raw_link = link.replace("github", "raw.githubusercontent").replace("blob/", "")
+        stripped_link = link.replace("https://github.com/arcadia-redux/", "")
+        repo_name, *rest = stripped_link.split("/")
+        file_name = rest[-1]
+        if "#" not in file_name:
+            return
+        file_name, line_pointers_string = file_name.split("#")
+        rest[-1] = file_name
+        if "." in file_name:
+            _, extension = file_name.split(".")
+        else:
+            extension = ""
+        line_pointers = [int(line[1:]) for line in re.findall(self.line_pointer_regex, line_pointers_string)]
+
+        raw_content_response = await self.bot.session.get(raw_link, headers=base_api_headers)
+        if raw_content_response.status > 200:
+            logger.info(f"{await raw_content_response.text()}")
+            return
+        raw_content = (await raw_content_response.text()).split("\n")
+        if len(line_pointers) == 1:
+            resulting_code = raw_content[line_pointers[0] - 1]
+        elif len(line_pointers) == 2:
+            resulting_code = "\n".join(
+                raw_content[line_pointers[0] - 1: line_pointers[1]]
+            )
+        else:
+            logger.info(f"not enough line pointers: {line_pointers}")
+            return
+        embed = get_code_block_embed(extension, resulting_code, repo_name, line_pointers, rest[1:], link)
+        await message.reply(embed=embed)
+
     async def process_github_links(self, message: Message):
         content = message.content
         links = re.findall(self.url_regex, content)
@@ -273,21 +311,33 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
         for link in links:
             if link.endswith("/"):
                 link = link[:-1]
+            if "/blob/" in link:
+                await self.process_blob_link(message, link)
+                continue
             repo_name, link_type, object_id = link.split("/")[-3:]
             if repo_name not in self.private_repos:
                 continue
-            if link_type == "issues":
+            if "#" in object_id:
+                object_id, link_type, sub_object_id = self.process_object_id(object_id)
+            logger.info(link_type)
+            if link_type == "issues" or link_type == "issue":
                 status, data = await get_issue_by_number(self.bot.session, repo_name, object_id)
                 if not status:
                     continue
                 embed = await get_issue_embed(self.bot.session, data, object_id, repo_name, link)
-                await message.channel.send(embed=embed)
             elif link_type == "pull":
                 status, data = await get_pull_request_by_number(self.bot.session, repo_name, object_id)
                 if not status:
                     continue
                 embed = await get_pull_request_embed(self.bot.session, data, object_id, repo_name, link)
-                await message.channel.send(embed=embed)
+            elif link_type == "issuecomment":
+                status, data = await get_issue_comment(self.bot.session, repo_name, sub_object_id)
+                if not status:
+                    continue
+                embed = await get_issue_comment_embed(self.bot.session, data, object_id, repo_name, link)
+            else:
+                return
+            await message.channel.send(embed=embed)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):

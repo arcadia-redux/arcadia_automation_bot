@@ -1,8 +1,11 @@
+from urllib.parse import quote
 from aiohttp import ClientSession
 from discord import Embed
 from datetime import datetime
 from discord.colour import Colour
 import re
+
+from typing import List
 
 from ..github_integration import get_issue_by_number, get_pull_request_by_number
 
@@ -22,6 +25,22 @@ def get_image_link(body: str) -> (str, str):
         cleaned_body = body.replace(link_structure + "\n", "").replace(link_structure + "\r\n", "")
         return extracted_link, cleaned_body
     return "", body
+
+
+def get_users_parsed(assignees: List[dict]) -> str:
+    parsed_assignees = [
+        f"[`{assignee['login']}`](https://github.com/{assignee['login']})"
+        for assignee in assignees
+    ]
+    return ", ".join(parsed_assignees)
+
+
+def get_labels_parsed(repo_name: str, labels: List[dict]) -> str:
+    parsed_labels = [
+        f"[`{label['name']}`](https://github.com/arcadia-redux/{repo_name}/labels/{quote(label['name'])})"
+        for label in labels
+    ]
+    return ", ".join(parsed_labels)
 
 
 async def parse_markdown(session: ClientSession, text: str, repo_name: str) -> str:
@@ -55,9 +74,11 @@ async def parse_markdown(session: ClientSession, text: str, repo_name: str) -> s
 
 
 async def get_issue_embed(session: ClientSession, data: dict, object_id: str, repo_name: str, link: str) -> Embed:
-    labels = ", ".join([f"`{label['name']}`" for label in data['labels']])
-    assignees = ", ".join([f"`{assignee['login']}`" for assignee in data['assignees']])
-    milestone = data["milestone"].get("title", None)
+    labels = get_labels_parsed(repo_name, data['labels'])
+    assignees = get_users_parsed(data["assignees"])
+    milestone = data.get("milestone", {})
+    if milestone:
+        milestone = milestone.get("title", None)
     image_link, data["body"] = get_image_link(data["body"])
     data["body"] = await parse_markdown(session, data["body"] or "", repo_name)
     description = [
@@ -84,10 +105,12 @@ async def get_issue_embed(session: ClientSession, data: dict, object_id: str, re
     return embed
 
 
-async def get_pull_request_embed(session: ClientSession, data: dict, object_id: str, repo_name: str, link: str) -> Embed:
-    labels = ", ".join([f"`{label['name']}`" for label in data['labels']])
-    assignees = ", ".join([f"`{assignee['login']}`" for assignee in data['assignees']])
-    reviewers = ", ".join([f"`{reviewer['login']}`" for reviewer in data["requested_reviewers"]])
+async def get_pull_request_embed(session: ClientSession, data: dict, object_id: str, repo_name: str,
+                                 link: str) -> Embed:
+    labels = get_labels_parsed(repo_name, data['labels'])
+    assignees = get_users_parsed(data["assignees"])
+    reviewers = get_users_parsed(data["requested_reviewers"])
+    # ", ".join([f"`{reviewer['login']}`" for reviewer in data["requested_reviewers"]])
     milestone = data["milestone"]["title"] if data["milestone"] else None
     merge_state = ""
     color = Colour.green()
@@ -128,4 +151,45 @@ async def get_pull_request_embed(session: ClientSession, data: dict, object_id: 
     opened_at_date = datetime.strptime(data['created_at'], "%Y-%m-%dT%H:%M:%SZ")
     embed.set_footer(text=f"{data['comments']} comment{'s' if data['comments'] != 1 else ''} "
                           f"| Opened at {opened_at_date.strftime('%c')}")
+    return embed
+
+
+async def get_issue_comment_embed(session: ClientSession, data: dict, object_id: str, repo_name: str,
+                                  link: str) -> Embed:
+    image_link, new_body = get_image_link(data["body"] or "")
+    new_body = await parse_markdown(session, new_body, repo_name)
+    embed = Embed(
+        title=f"{data['user']['login']}:",
+        description=new_body,
+        colour=Colour.dark_gold()
+    )
+    embed.set_author(
+        name=f"Comment at issue #{object_id} in {repo_name}",
+        url=link,
+        icon_url=data['user']['avatar_url']
+    )
+    opened_at_date = datetime.strptime(data['created_at'], "%Y-%m-%dT%H:%M:%SZ")
+    embed.set_footer(text=f"Commented at {opened_at_date.strftime('%c')}")
+    if image_link:
+        embed.set_image(url=image_link)
+    return embed
+
+
+def get_code_block_embed(extension: str, code: str, repo_name: str, line_pointers: List[int],
+                         file_path_details: List[str], full_link: str) -> Embed:
+    commit_sha = file_path_details[0]
+    if len(line_pointers) == 1:
+        title = f"Line **{line_pointers[0]}** at [`{commit_sha[:6]}`]" \
+                f"(https://github.com/arcadia-redux/{repo_name}/commit/{commit_sha})"
+    else:
+        title = f"Lines **{line_pointers[0]}** to **{line_pointers[1]}** at [`{commit_sha[:6]}`]" \
+                f"(https://github.com/arcadia-redux/{repo_name}/commit/{commit_sha})"
+    embed = Embed(
+        description=f"{title}\n```{extension}\n{code}```",
+        colour=Colour.dark_teal()
+    )
+    embed.set_author(
+        name=f"Code snippet at /{'/'.join(file_path_details[1:])}",
+        url=full_link
+    )
     return embed

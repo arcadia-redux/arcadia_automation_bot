@@ -247,6 +247,12 @@ async def comment_issue(session: ClientSession, repo: str, issue_id: _Numeric, b
     )
 
 
+async def get_issue_comment(session: ClientSession, repo: str, comment_id: _Numeric) -> _ApiResponse:
+    return await github_api_request(
+        session, ApiRequestKind.GET, f"/repos/arcadia-redux/{repo}/issues/comments/{comment_id}"
+    )
+
+
 async def search_issues(session: ClientSession, repo: str, query: str,
                         page_num: Optional[_Numeric] = 1, per_page: Optional[_Numeric] = 10) -> _ApiResponse:
     request_body = {
