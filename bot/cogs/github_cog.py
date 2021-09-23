@@ -24,7 +24,7 @@ class Github(commands.Cog, name="Github"):
         ]
         self.private_repos = [
             "reVolt", "custom_hero_clash", "chclash_webserver", "war_masters", "revolt-webserver",
-            "pathfinders", "pathfinders-webserver"
+            "pathfinders", "pathfinders-webserver", "dab"
         ]
 
         self.reply_processors = {
