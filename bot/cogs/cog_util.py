@@ -52,7 +52,7 @@ async def process_attachments_contextless(message, session, attachment_url: str,
     content_length = int(resp.headers['Content-Length'])
     logger.info(f"[Image processing] received content length: {content_length}")
     result = io.BytesIO()
-    if content_length >= 1e7:
+    if content_length >= 6e+6:
         warn_msg = await message.reply(
             f"Attached image size exceeded 10mb. Compressing image, issue will be opened afterwards."
         )
