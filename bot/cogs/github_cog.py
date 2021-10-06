@@ -125,7 +125,10 @@ class Github(commands.Cog, name="Github"):
         return status
 
     async def _reply_close(self, message: Message, repo: str, issue_id: str, reason: List[str]) -> bool:
-        status, _ = await comment_issue(self.bot.session, repo, issue_id, " ".join(reason))
+        if len(reason) > 0:
+            status, _ = await comment_issue(
+                self.bot.session, repo, issue_id, comment_wrap_contextless(" ".join(reason), message, "Closed")
+            )
         status, _ = await close_issue(self.bot.session, repo, issue_id)
         return status
 

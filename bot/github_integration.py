@@ -29,7 +29,8 @@ preset_repos = {
     "bot": "arcadia_automation_bot",
     "conquest": "conquest",
     "revolt-web": "revolt-webserver",
-    "path": "pathfinders",
+    "path": "pathfinder_issues",
+    "pathfinder": "pathfinder",  # main private pathfinder repo
     "dab": "dab"
 }
 
@@ -66,8 +67,8 @@ def comment_wrap(body: str, context: Context) -> str:
            f"Follow the conversation [here]({context.message.jump_url})"
 
 
-def comment_wrap_contextless(body: str, message: Message) -> str:
-    return f"{body if body else ''}\n\nComment from Discord by " \
+def comment_wrap_contextless(body: str, message: Message, comment_prefix: str = "Comment") -> str:
+    return f"{body if body else ''}\n\n{comment_prefix} from Discord by " \
            f"**{message.author.name}#{message.author.discriminator}**\n" \
            f"Follow the conversation [here]({message.jump_url})"
 
