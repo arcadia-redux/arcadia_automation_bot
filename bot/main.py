@@ -134,7 +134,9 @@ async def send_suggestion(message: bytes):
     decoded = json.loads(message)
     custom_game = decoded["custom_game"]
     steam_id = decoded["steam_id"]
-    text = decoded["text"]
+    text = decoded["text"].strip()
+    if len(text) < 3:
+        return
     supporter_level = decoded.get("supporter_level", -1)
 
     logger.info(f"Message from channel {custom_game} by {steam_id}: {text}")
@@ -160,14 +162,14 @@ async def send_suggestion(message: bytes):
 
     embed = discord.Embed(
         timestamp=datetime.datetime.utcnow(),
-        description=f'```{decoded["text"].strip()}```',
+        description=f'```{text.strip()}```',
     )
     embed.set_author(
         name=f"{{{supporter_level}}}  " + profile_name if supporter_level > -1 else profile_name,
         url=f"https://steamcommunity.com/profiles/{steam_id}",
         icon_url=profile_avatar_link or ""
     )
-    if translated and language != "en":
+    if translated and language != "en" and translated.strip() != text:
         embed.add_field(name=f"Translation from **{language.upper()}**", value=f"```{translated}```")
 
     if custom_game == "CustomHeroClash" and steam_id:
@@ -215,12 +217,21 @@ async def on_message(message: discord.Message):
                 continue
 
             tl_prefix = message_text.lower()[0:3]
+            applied_translation = False
             if tl_prefix == "cn:" or tl_prefix == "cn ":
                 message_text, detected_language = await translate_single(message_text[3:], "zh-CN")
                 await message.reply(f"Sent translated to chinese: {message_text}")
+                applied_translation = True
             if tl_prefix == "ru:" or tl_prefix == "ru ":
                 message_text, detected_language = await translate_single(message_text[3:], "ru")
                 await message.reply(f"Sent translated to russian: {message_text}")
+                applied_translation = True
+
+            if not applied_translation:
+                translated_text, detected_language = await translate_single(message_text)
+                logger.info(f"chat translate, {detected_language=}")
+                if detected_language != "en" and translated_text != message_text:
+                    await message.reply(f"[TL: {detected_language} => en] {translated_text}", mention_author=False)
 
             backend_link = SERVER_LINKS.get(custom_game, None)
             if not backend_link:
