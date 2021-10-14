@@ -11,6 +11,7 @@ class ApiRequestKind(Enum):
     GET = auto()
     PUT = auto()
     PATCH = auto()
+    DELETE = auto()
 
     def __str__(self):
         return self.name.lower()

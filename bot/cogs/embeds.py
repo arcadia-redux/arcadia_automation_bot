@@ -1,11 +1,11 @@
+import re
+from datetime import datetime
+from typing import List
 from urllib.parse import quote
+
 from aiohttp import ClientSession
 from discord import Embed
-from datetime import datetime
 from discord.colour import Colour
-import re
-
-from typing import List
 
 from ..github_integration import get_issue_by_number, get_pull_request_by_number
 
@@ -79,7 +79,7 @@ async def get_issue_embed(session: ClientSession, data: dict, object_id: str, re
     milestone = data.get("milestone", {})
     if milestone:
         milestone = milestone.get("title", None)
-    image_link, data["body"] = get_image_link(data["body"])
+    image_link, data["body"] = get_image_link(data["body"] or "")
     data["body"] = await parse_markdown(session, data["body"] or "", repo_name)
     description = [
         f"**Labels**: {labels}" if labels else "",
@@ -191,5 +191,19 @@ def get_code_block_embed(extension: str, code: str, repo_name: str, line_pointer
     embed.set_author(
         name=f"Code snippet at /{'/'.join(file_path_details[1:])}",
         url=full_link
+    )
+    return embed
+
+
+def get_new_issue_embed(issue_data: dict, repo_name: str, author_url: str) -> Embed:
+    embed = Embed(
+        description=f"Reply to this message to interact with new issue",
+        colour=Colour.green(),
+        timestamp=datetime.utcnow(),
+    )
+    embed.set_author(
+        icon_url=author_url,
+        name=f"Opened issue #{issue_data['number']} in {repo_name}",
+        url=issue_data['html_url']
     )
     return embed

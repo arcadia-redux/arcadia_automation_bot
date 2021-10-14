@@ -6,7 +6,6 @@ cachetools==4.2.1
 certifi==2020.12.5
 chardet==3.0.4
 colorama==0.4.4
-discord.py==1.6.0
 google-api-core==1.25.1
 google-auth==1.24.0
 google-cloud-core==1.5.0
@@ -35,3 +34,5 @@ urllib3==1.26.5
 win32-setctime==1.0.3
 yarl==1.6.3
 python-dotenv~=0.17.1
+
+https://github.com/Pycord-Development/pycord/archive/refs/heads/master.zip

@@ -1,14 +1,20 @@
-from discord.ext import commands, tasks
-from discord import Game, Embed, Member
-from loguru import logger
 from datetime import datetime, timedelta
-from croniter import croniter
 from typing import Optional
+
+from croniter import croniter
+from discord import Game, Embed, SlashCommand
+from discord.app import Option
+from discord.app.context import InteractionContext
+from discord.ext import commands, tasks
+from loguru import logger
 
 
 class Core(commands.Cog, name="Core"):
     def __init__(self, bot):
         self.bot = bot
+        self.bot.application_command(name="tournament", cls=SlashCommand, guild_ids=[self.bot.target_guild_ids, ])(
+            self.tournament_slash
+        )
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -118,20 +124,22 @@ class Core(commands.Cog, name="Core"):
         commands_list = f"\n".join([key.decode("utf-8") for key in keys])
         await context.send(f"Linked commands:\n```{commands_list}```")
 
-    @commands.command()
-    @commands.has_permissions(manage_messages=True)
-    async def tournament(self, context: commands.Context, state: Optional[str]):
+    async def tournament_slash(
+        self, context: InteractionContext,
+        state: Option(str, "Tournament state", choices=["on", "off"], required=False)
+    ):
+        """ Sets or displays State of tournament mode for Custom Hero Clash """
         if not state:
-            saved_state = await context.bot.redis.get("tournament-mode-state")
+            saved_state = await self.bot.redis.get("tournament-mode-state")
             if saved_state is None:
                 saved_state = "off"
             else:
                 saved_state = "on" if bool(saved_state) is True else "off"
-            await context.reply(f"Tournament mode state: **{saved_state}**")
+            await context.respond(f"Tournament mode state: **{saved_state}**", ephemeral=True)
             return
         new_state = bytes(state == "on")
-        await context.bot.redis.set("tournament-mode-state", new_state)
-        await context.reply(f"Set tournament mode state to **{state}**")
+        await self.bot.redis.set("tournament-mode-state", new_state)
+        await context.respond(f"Set tournament mode state to **{state}**", ephemeral=True)
 
     @commands.command()
     @commands.has_permissions(manage_messages=True)

@@ -1,10 +1,14 @@
-from discord.ext import commands, tasks
-from discord import colour, Member
 import asyncio
 
-from ..github_integration import *
+from discord import colour, MessageCommand, UserCommand, SlashCommand
+from discord.app import Option
+from discord.app.context import InteractionContext
+from discord.ext import commands, tasks
+
 from .cog_util import *
 from .embeds import *
+from ..github_integration import *
+from ..views.github import IssueControls, IssueCreation
 
 _WarningLabelName: Final[str] = "[Auto] Cleanup warned"
 
@@ -24,7 +28,7 @@ class Github(commands.Cog, name="Github"):
         ]
         self.private_repos = [
             "reVolt", "custom_hero_clash", "chclash_webserver", "war_masters", "revolt-webserver",
-            "pathfinders", "pathfinders-webserver", "dab"
+            "pathfinders", "pathfinders-webserver", "dab", "arcadia_automation_bot"
         ]
 
         self.reply_processors = {
@@ -42,6 +46,76 @@ class Github(commands.Cog, name="Github"):
         )
         self.numeric_regex = re.compile(r'[-+]?\d+')
         self.line_pointer_regex = re.compile(r'L\d+')
+
+        self.bot.application_command(
+            name="[Github] Make Issue", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
+        )(self.issue_message_command)
+
+        self.bot.application_command(
+            name="[Github] Get Github username", cls=UserCommand, guild_ids=[self.bot.target_guild_ids, ]
+        )(self.github_username_user_command)
+
+        self.bot.application_command(
+            name="issue", cls=SlashCommand, guild_ids=[self.bot.target_guild_ids, ]
+        )(self.issue_slash_command)
+
+    async def issue_message_command(self, context: InteractionContext, message: Message):
+        content = message.content
+        view = IssueCreation(message)
+        msg = await context.respond(f"Specify target repo: ", view=view, ephemeral=True)
+        view.assign_message(msg)
+        timed_out = await view.wait()
+        if timed_out:
+            return
+        selected_repo = preset_repos[view.values[0]]
+
+        status, details = await open_issue_contextless(
+            self.bot.session, context.author, selected_repo, content, ""
+        )
+
+        if not status:
+            logger.warning(f"github issue: {details}")
+            return
+        embed = get_new_issue_embed(details, selected_repo, str(context.author.avatar.url))
+        issue_view = IssueControls(self.bot.session, selected_repo, details['number'], details)
+        msg = await message.reply(
+            f"{context.author.name} opened issue from this message.", embed=embed, view=issue_view
+        )
+        issue_view.assign_message(msg)
+
+    async def issue_slash_command(
+            self,
+            context: InteractionContext,
+            repo_name: Option(str, "Repository name", choices=list(preset_repos.keys()), required=True),
+            title: Option(str, "Issue title", required=True),
+            description: Option(str, "Issue description", required=False)
+    ):
+        """ Open new GitHub issue in target repo """
+        full_repo_name = preset_repos.get(repo_name, None)
+        if not full_repo_name:
+            await context.respond(f"Unknown repo name. Please use one from slash command choices.", ephemeral=True)
+            return
+
+        status, details = await open_issue_contextless(
+            self.bot.session, context.author, full_repo_name, title, description
+        )
+        if not status:
+            await context.respond(f"Error creating issue:\n{details}", ephemeral=True)
+            return
+        embed = get_new_issue_embed(details, full_repo_name, str(context.author.avatar.url))
+        issue_view = IssueControls(self.bot.session, full_repo_name, details['number'], details)
+        msg = await context.respond(
+            f"{context.author.name} opened issue using slash command", embed=embed, view=issue_view
+        )
+        issue_view.assign_message(msg)
+
+    async def github_username_user_command(self, context: InteractionContext, member: Member):
+        github_name = await self.bot.redis.hget("github_mention", member.mention, encoding="utf8")
+        if github_name:
+            msg = f"Github username of {member.mention} is **{github_name}**"
+        else:
+            msg = f"No associated Github username for {member.mention} stored!"
+        await context.respond(msg, ephemeral=True)
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -129,7 +203,7 @@ class Github(commands.Cog, name="Github"):
             status, _ = await comment_issue(
                 self.bot.session, repo, issue_id, comment_wrap_contextless(" ".join(reason), message, "Closed")
             )
-        status, _ = await close_issue(self.bot.session, repo, issue_id)
+        status, _ = await set_issue_state(self.bot.session, repo, issue_id)
         return status
 
     async def _reply_label(self, message: Message, repo: str, issue_id: str, labels_base: List[str]) -> bool:
@@ -323,16 +397,19 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
             if "#" in object_id:
                 object_id, link_type, sub_object_id = self.process_object_id(object_id)
             logger.info(link_type)
+            view = None
             if link_type == "issues" or link_type == "issue":
                 status, data = await get_issue_by_number(self.bot.session, repo_name, object_id)
                 if not status:
                     continue
                 embed = await get_issue_embed(self.bot.session, data, object_id, repo_name, link)
+                view = IssueControls(self.bot.session, repo_name, object_id, data)
             elif link_type == "pull":
                 status, data = await get_pull_request_by_number(self.bot.session, repo_name, object_id)
                 if not status:
                     continue
                 embed = await get_pull_request_embed(self.bot.session, data, object_id, repo_name, link)
+                view = IssueControls(self.bot.session, repo_name, object_id, data)
             elif link_type == "issuecomment":
                 status, data = await get_issue_comment(self.bot.session, repo_name, sub_object_id)
                 if not status:
@@ -340,7 +417,11 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
                 embed = await get_issue_comment_embed(self.bot.session, data, object_id, repo_name, link)
             else:
                 return
-            await message.channel.send(embed=embed)
+            if view:
+                msg = await message.channel.send(embed=embed, view=view)
+                view.assign_message(msg)
+            else:
+                await message.channel.send(embed=embed)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
@@ -498,7 +579,7 @@ description: New description, set from bot
     @staticmethod
     async def _close_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
         issue_id = args[1] if args_len > 1 else await get_argument(context, "Waiting for issue id:")
-        status, detail = await close_issue(context.bot.session, repo, issue_id)
+        status, detail = await set_issue_state(context.bot.session, repo, issue_id)
         if status:
             await context.send(f"Successfully closed issue **#{issue_id}** of **{repo}**")
         else:
@@ -541,17 +622,10 @@ description: New description, set from bot
         status, details = await open_issue(context, repo, title, body)
 
         if status:
-            embed = Embed(
-                description=f"Reply to this message to interact with new issue",
-                colour=colour.Colour.green(),
-                timestamp=datetime.utcnow(),
-            )
-            embed.set_author(
-                icon_url=str(context.message.author.avatar_url),
-                name=f"Opened issue #{details['number']} in {repo}",
-                url=details['html_url']
-            )
-            await context.send(embed=embed)
+            embed = get_new_issue_embed(details, repo, str(context.message.author.avatar.url))
+            issue_view = IssueControls(context.bot.session, repo, details["number"], details)
+            msg = await context.send(embed=embed, view=issue_view)
+            issue_view.assign_message(msg)
         else:
             await context.reply(f"GitHub error occurred:\n{details}.")
 
@@ -659,10 +733,6 @@ description: New description, set from bot
         embed.set_author(name=f"Search in {repo}", url=f"https://github.com/arcadia-redux/{repo}")
         await context.send(embed=embed)
 
-    @commands.command()
-    async def test_scan(self, context: Context):
-        await self._search_old_issues_in_repo_with_label("custom_hero_clash_issues", '"unknown cause"')
-
     async def _search_old_issues_in_repo_with_label(self, repo_name: str, label_name: str):
         logger.info(f"[Scan] Scanning old issues in {repo_name} / {label_name}")
         status, data = await search_issues(self.bot.session, repo_name, f"is:open label:{label_name}", per_page=50)
@@ -702,7 +772,7 @@ description: New description, set from bot
                 if not status:
                     logger.warning(f"[Scan] Error when adding labels to issue {issue_number}, {_data}")
             else:
-                status, _data = await close_issue(self.bot.session, repo_name, issue_number)
+                status, _data = await set_issue_state(self.bot.session, repo_name, issue_number)
                 if not status:
                     logger.warning(f"[Scan] Failed to close issue {issue_number} in scan: {_data}")
 

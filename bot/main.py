@@ -30,6 +30,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 bot.session = aiohttp.ClientSession()
+bot.target_guild_ids = int(os.getenv("INTERACTION_GUILD_TARGET"))
 bot.add_cog(github_cog.Github(bot))
 bot.add_cog(core_cog.Core(bot))
 
@@ -171,16 +172,6 @@ async def send_suggestion(message: bytes):
     )
     if translated and language != "en" and translated.strip() != text:
         embed.add_field(name=f"Translation from **{language.upper()}**", value=f"```{translated}```")
-
-    if custom_game == "CustomHeroClash" and steam_id:
-        embed.add_field(
-            name=f"🌟 Reward 🌟",
-            value="\t|\t".join(
-                f"[{i}<:fortune:831077783446749194>](https://chc-2.dota2unofficial.com/api/lua/mail/feedback"
-                f"?steam_id={steam_id}&fortune_value={i})" for i in
-                [5, 10, 25, 50, 100]),
-            inline=False
-        )
 
     await report_channel.send(embed=embed)
 
