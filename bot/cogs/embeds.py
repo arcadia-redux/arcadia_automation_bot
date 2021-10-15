@@ -73,23 +73,28 @@ async def parse_markdown(session: ClientSession, text: str, repo_name: str) -> s
     return text.replace("- [x]", "✅").replace("* [x]", "✅").replace("- [ ]", "☐")
 
 
-async def get_issue_embed(session: ClientSession, data: dict, object_id: str, repo_name: str, link: str) -> Embed:
+async def get_issue_embed(session: ClientSession, data: dict, object_id: str, repo_name: str,
+                          link: str = None) -> Embed:
+    if not link:
+        link = data["html_url"]
     labels = get_labels_parsed(repo_name, data['labels'])
     assignees = get_users_parsed(data["assignees"])
     milestone = data.get("milestone", {})
     if milestone:
         milestone = milestone.get("title", None)
     image_link, data["body"] = get_image_link(data["body"] or "")
-    data["body"] = await parse_markdown(session, data["body"] or "", repo_name)
+    data["body"] = (await parse_markdown(session, data["body"] or "", repo_name)).strip()
     description = [
-        f"**Labels**: {labels}" if labels else "",
-        f"**Assignees**: {assignees}" if assignees else "",
-        f"**Milestone**: `{milestone}`" if milestone else "",
-        f'\n{data["body"]}' if len(data["body"]) < 1200 else "",
+        f"**Labels**: {labels}\n" if labels else "",
+        f"**Assignees**: {assignees}\n" if assignees else "",
+        f"**Milestone**: `{milestone}`\n" if milestone else "",
+        f'\n{data["body"]}' if len(data["body"]) < 1800 else "",
     ]
+    complete_description = "".join(description)
+
     embed = Embed(
         title=data['title'],
-        description="\n".join(description),
+        description=complete_description,
         colour=Colour.green() if data['state'] == "open" else Colour.red(),
     )
     embed.set_author(
@@ -191,19 +196,5 @@ def get_code_block_embed(extension: str, code: str, repo_name: str, line_pointer
     embed.set_author(
         name=f"Code snippet at /{'/'.join(file_path_details[1:])}",
         url=full_link
-    )
-    return embed
-
-
-def get_new_issue_embed(issue_data: dict, repo_name: str, author_url: str) -> Embed:
-    embed = Embed(
-        description=f"Reply to this message to interact with new issue",
-        colour=Colour.green(),
-        timestamp=datetime.utcnow(),
-    )
-    embed.set_author(
-        icon_url=author_url,
-        name=f"Opened issue #{issue_data['number']} in {repo_name}",
-        url=issue_data['html_url']
     )
     return embed

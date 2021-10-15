@@ -52,7 +52,7 @@ class Github(commands.Cog, name="Github"):
         )(self.issue_message_command)
 
         self.bot.application_command(
-            name="[Github] Get Github username", cls=UserCommand, guild_ids=[self.bot.target_guild_ids, ]
+            name="Github Username", cls=UserCommand, guild_ids=[self.bot.target_guild_ids, ]
         )(self.github_username_user_command)
 
         self.bot.application_command(
@@ -76,8 +76,8 @@ class Github(commands.Cog, name="Github"):
         if not status:
             logger.warning(f"github issue: {details}")
             return
-        embed = get_new_issue_embed(details, selected_repo, str(context.author.avatar.url))
-        issue_view = IssueControls(self.bot.session, selected_repo, details['number'], details)
+        embed = await get_issue_embed(self.bot.session, details, details["number"], selected_repo)
+        issue_view = IssueControls(self.bot.session, selected_repo, details["number"], details)
         msg = await message.reply(
             f"{context.author.name} opened issue from this message.", embed=embed, view=issue_view
         )
@@ -102,9 +102,10 @@ class Github(commands.Cog, name="Github"):
         if not status:
             await context.respond(f"Error creating issue:\n{details}", ephemeral=True)
             return
-        embed = get_new_issue_embed(details, full_repo_name, str(context.author.avatar.url))
+        embed = await get_issue_embed(self.bot.session, details, details["number"], full_repo_name)
         issue_view = IssueControls(self.bot.session, full_repo_name, details['number'], details)
-        msg = await context.respond(
+        await context.respond("Success!", ephemeral=True)
+        msg = await context.followup.send(
             f"{context.author.name} opened issue using slash command", embed=embed, view=issue_view
         )
         issue_view.assign_message(msg)
@@ -396,7 +397,6 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
                 continue
             if "#" in object_id:
                 object_id, link_type, sub_object_id = self.process_object_id(object_id)
-            logger.info(link_type)
             view = None
             if link_type == "issues" or link_type == "issue":
                 status, data = await get_issue_by_number(self.bot.session, repo_name, object_id)
@@ -622,7 +622,7 @@ description: New description, set from bot
         status, details = await open_issue(context, repo, title, body)
 
         if status:
-            embed = get_new_issue_embed(details, repo, str(context.message.author.avatar.url))
+            embed = await get_issue_embed(context.bot.session, details, details["number"], repo)
             issue_view = IssueControls(context.bot.session, repo, details["number"], details)
             msg = await context.send(embed=embed, view=issue_view)
             issue_view.assign_message(msg)
@@ -722,7 +722,9 @@ description: New description, set from bot
             )
 
         description.append(
-            f"\n[`How to compose queries`](https://docs.github.com/en/github/searching-for-information-on-github/searching-on-github/searching-issues-and-pull-requests#search-only-issues-or-pull-requests)")
+            f"\n[`How to compose queries`](https://docs.github.com/en/github/searching-for-information-on-github/"
+            f"searching-on-github/searching-issues-and-pull-requests#search-only-issues-or-pull-requests)"
+        )
 
         embed = Embed(
             title=f"Total search results: {results} {'listing 10' if results > 10 else ''}",

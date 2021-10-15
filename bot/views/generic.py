@@ -1,14 +1,34 @@
-from typing import List
+from inspect import iscoroutinefunction
+from typing import List, Optional, Callable, Union, Awaitable
 
-from discord import Message, SelectOption, Interaction
+from discord import Message, SelectOption, Interaction, ButtonStyle
 from discord.errors import NotFound
-from discord.ui import View, Select
+from discord.ui import View, Select, Button
 from loguru import logger
+
+_Callback = Callable[["MultiselectView"], Union[None, Awaitable[None]]]
+
+
+class ActionButton(Button):
+    def __init__(self, label: str, style: ButtonStyle):
+        super().__init__(label=label, style=style)
+        self.__callback = None
+
+    async def callback(self, interaction: Interaction):
+        if self.__callback:
+            await (self.__callback(self, interaction))
+
+    def set_callback(self, callback: _Callback):
+        self.__callback = callback
 
 
 class TimeoutView(View):
     """ view, that removes itself from message on timeout, leaving source message intact """
     assigned_message = None
+
+    complete_callback = None
+    complete_description = "Interaction complete. You may close it now."
+    remove_view = False
 
     def __init__(self):
         super().__init__(timeout=600)
@@ -30,6 +50,7 @@ class TimeoutView(View):
 
 class TimeoutErasingView(TimeoutView):
     """ view, that removes itself together with source message on timeout """
+
     def __init__(self):
         super().__init__()
 
@@ -42,12 +63,13 @@ class TimeoutErasingView(TimeoutView):
 
 
 class MultiselectDropdown(Select):
-    def __init__(self, placeholder: str, options_base: List[dict], min_values: int = 0, max_values: int = 10):
+    def __init__(self, placeholder: str, options_base: List[dict], min_values: int = 0, max_values: int = 10,
+                 is_sorted: bool = False):
         options = []
-        for option_definition in sorted(options_base, key=lambda item: item["name"]):
+        for option_def in (sorted(options_base, key=lambda item: item["name"]) if not is_sorted else options_base):
             options.append(SelectOption(
-                label=option_definition["name"], description=option_definition.get("description", None),
-                default=option_definition.get("selected", False)
+                label=option_def["name"], description=option_def.get("description", None),
+                default=option_def.get("selected", False)
             ))
         super().__init__(
             placeholder=placeholder,
@@ -60,11 +82,29 @@ class MultiselectDropdown(Select):
         self.view.values = self.values
         self.disabled = True
         self.view.stop()
-        await interaction.response.edit_message(content="Interaction complete. You may close it now.", view=self.view)
+
+        if self.view.complete_callback:
+            if iscoroutinefunction(self.view.complete_callback):
+                await self.view.complete_callback(self.view)
+            else:
+                self.view.complete_callback(self.view)
+
+        if not self.view.remove_view:
+            await interaction.response.edit_message(content=self.view.complete_description, view=self.view)
+        else:
+            await interaction.response.edit_message(content=self.view.complete_description, view=None)
 
 
 class MultiselectView(TimeoutErasingView):
-    def __init__(self, placeholder: str, items: List[dict], min_values: int = 0, max_values: int = 10):
+    def __init__(self, placeholder: str, items: List[dict], min_values: int = 0, max_values: int = 10,
+                 is_sorted: bool = False):
         super().__init__()
         self.values = {}
-        self.add_item(MultiselectDropdown(placeholder, items, min_values, max_values))
+        self.add_item(MultiselectDropdown(placeholder, items, min_values, max_values, is_sorted))
+
+    def set_complete_behaviour(self, complete_description: str, remove_view: Optional[bool] = False):
+        self.complete_description = complete_description
+        self.remove_view = remove_view
+
+    def set_on_complete(self, callback: _Callback):
+        self.complete_callback = callback

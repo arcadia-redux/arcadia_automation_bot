@@ -13,7 +13,7 @@ from aioredis.pubsub import Receiver
 from discord.ext import commands, tasks
 from loguru import logger
 
-from .cogs import github_cog, core_cog
+from .cogs import github_cog, core_cog, scheduling_cog
 from .enums import BotState
 from .translator import translate_single, translate
 
@@ -32,6 +32,7 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 bot.session = aiohttp.ClientSession()
 bot.target_guild_ids = int(os.getenv("INTERACTION_GUILD_TARGET"))
 bot.add_cog(github_cog.Github(bot))
+bot.add_cog(scheduling_cog.SchedulingCog(bot))
 bot.add_cog(core_cog.Core(bot))
 
 # ew, hardcode
