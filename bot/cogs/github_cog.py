@@ -60,6 +60,7 @@ class Github(commands.Cog, name="Github"):
         )(self.issue_slash_command)
 
     async def issue_message_command(self, context: InteractionContext, message: Message):
+        """ Open new GitHub issue, with interactive repo and title selection """
         content = message.content
         view = IssueCreation(message)
         msg = await context.respond(f"Specify target repo: ", view=view, ephemeral=True)
@@ -69,8 +70,22 @@ class Github(commands.Cog, name="Github"):
             return
         selected_repo = preset_repos[view.values[0]]
 
+        await context.followup.send(
+            f"{context.author.mention}, please send issue title (as a usual message)", ephemeral=True
+        )
+        try:
+            result = await context.bot.wait_for(
+                "message", check=lambda _message: _message.author == context.author, timeout=120
+            )
+            issue_title = result.content.strip()
+            await result.delete()
+        except TimeoutError:
+            issue_title = f"[Automatic title] {context.author.name}#{context.author.discriminator} " \
+                          f"in {context.channel.name}"
+            logger.warning(f"get_argument timed out")
+
         status, details = await open_issue_contextless(
-            self.bot.session, context.author, selected_repo, content, ""
+            self.bot.session, context.author, selected_repo, issue_title, content
         )
 
         if not status:
@@ -79,7 +94,7 @@ class Github(commands.Cog, name="Github"):
         embed = await get_issue_embed(self.bot.session, details, details["number"], selected_repo)
         issue_view = IssueControls(self.bot.session, selected_repo, details["number"], details)
         msg = await message.reply(
-            f"{context.author.name} opened issue from this message.", embed=embed, view=issue_view
+            f"{context.author.mention} opened issue from this message.", embed=embed, view=issue_view
         )
         issue_view.assign_message(msg)
 

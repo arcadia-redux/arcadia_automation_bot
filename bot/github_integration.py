@@ -94,7 +94,8 @@ async def open_issue(context: Context, repo: str, title: str, body: Optional[str
     )
 
 
-async def open_issue_contextless(session: ClientSession, author: Member, repo: str, title: str, body: Optional[str] = "") -> _ApiResponse:
+async def open_issue_contextless(session: ClientSession, author: Member, repo: str, title: str,
+                                 body: Optional[str] = "") -> _ApiResponse:
     return await github_api_request(
         session, ApiRequestKind.POST, f"/repos/arcadia-redux/{repo}/issues", {
             "title": title,
@@ -111,7 +112,8 @@ async def set_issue_state(session: ClientSession, repo: str, issue_id: _Numeric,
     )
 
 
-async def update_issue_title_and_body(context: Context, repo: str, title: str, body: str, issue_id: _Numeric) -> _ApiResponse:
+async def update_issue_title_and_body(context: Context, repo: str, title: str, body: str,
+                                      issue_id: _Numeric) -> _ApiResponse:
     return await github_api_request(
         context.bot.session, ApiRequestKind.PATCH, f"/repos/arcadia-redux/{repo}/issues/{issue_id}", {
             "title": title,

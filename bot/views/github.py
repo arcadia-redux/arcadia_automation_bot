@@ -175,7 +175,7 @@ class IssueControls(TimeoutView):
 
         await self._update_details()
 
-    @button(emoji="❎", style=ButtonStyle.danger, row=2)
+    @button(emoji="✖️", style=ButtonStyle.danger, row=3)
     async def cancel_view(self, _button: Button, interaction: Interaction):
         self.stop()
         await self.remove_view_from_message()
