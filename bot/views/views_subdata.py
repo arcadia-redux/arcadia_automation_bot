@@ -19,7 +19,7 @@ close_reason_selection = [
 
 reopen_reason_selection = [
     {
-        "name": "Reoccures",
+        "name": "Reoccurs",
         "description": "Wasn't fully fixed"
     },
     {
