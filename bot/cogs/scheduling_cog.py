@@ -72,11 +72,14 @@ class SchedulingCog(commands.Cog):
         GLOBAL_BOT_REF = bot
         self.scheduler = AsyncIOScheduler()
 
-        redis_job_store = RedisJobStore(
-            host=getenv("REDIS_HOST"), password=getenv("PWD"), jobs_key='SchedulingCog.jobs',
-            run_times_key='SchedulingCog.run_times'
-        )
-        self.scheduler.add_jobstore(redis_job_store)
+        if not self.bot.running_local:
+            redis_job_store = RedisJobStore(
+                host=getenv("REDIS_HOST"), password=getenv("PWD"), jobs_key='SchedulingCog.jobs',
+                run_times_key='SchedulingCog.run_times'
+            )
+            self.scheduler.add_jobstore(redis_job_store)
+        else:
+            logger.info(f"Disabled Redis job store as running on local machine")
 
         self.scheduler.start()
 

@@ -3,7 +3,7 @@ from typing import List, Optional, Callable, Union, Awaitable
 
 from discord import Message, SelectOption, Interaction, ButtonStyle
 from discord.errors import NotFound
-from discord.ui import View, Select, Button
+from discord.ui import View, Select, Button, button
 from loguru import logger
 
 _Callback = Callable[["MultiselectView"], Union[None, Awaitable[None]]]
@@ -34,6 +34,12 @@ class TimeoutView(View):
         super().__init__(timeout=600)
 
     async def on_timeout(self) -> None:
+        await self.remove_view_from_message()
+
+    def assign_message(self, message: Message):
+        self.assigned_message = message
+
+    async def remove_view_from_message(self):
         if self.assigned_message:
             try:
                 await self.assigned_message.edit(
@@ -43,9 +49,6 @@ class TimeoutView(View):
                 )
             except NotFound:
                 logger.warning(f"Tried editing non-existent message in TimeoutView on_timeout")
-
-    def assign_message(self, message: Message):
-        self.assigned_message = message
 
 
 class TimeoutErasingView(TimeoutView):
@@ -63,18 +66,28 @@ class TimeoutErasingView(TimeoutView):
 
 
 class MultiselectDropdown(Select):
+    """
+        Custom component for flexible multi-select dropdown list.
+        Handles min-max, options with description, compliant to discord limits
+    """
     def __init__(self, placeholder: str, options_base: List[dict], min_values: int = 0, max_values: int = 10,
                  is_sorted: bool = False):
         options = []
-        for option_def in (sorted(options_base, key=lambda item: item["name"]) if not is_sorted else options_base):
+        prepared_options = list(
+            sorted(options_base, key=lambda item: item["name"]) if not is_sorted else options_base
+        )[:25]
+        for option_def in prepared_options:
+            description = option_def.get("description", None)
+            if description and len(description) >= 100:
+                description = description[:95] + "..."
             options.append(SelectOption(
-                label=option_def["name"], description=option_def.get("description", None),
+                label=option_def["name"], description=description,
                 default=option_def.get("selected", False)
             ))
         super().__init__(
             placeholder=placeholder,
-            min_values=min_values,
-            max_values=min(max_values, len(options_base)),
+            min_values=min(min_values, len(prepared_options)),
+            max_values=min(max_values, len(prepared_options)),
             options=options
         )
 

@@ -31,6 +31,7 @@ intents.members = True
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 bot.session = aiohttp.ClientSession()
 bot.target_guild_ids = int(os.getenv("INTERACTION_GUILD_TARGET"))
+bot.running_local = LOCALS_IMPORTED
 bot.add_cog(github_cog.Github(bot))
 bot.add_cog(scheduling_cog.SchedulingCog(bot))
 bot.add_cog(core_cog.Core(bot))
@@ -65,7 +66,6 @@ async def on_ready():
     url = os.getenv("REDIS_URl")
     pwd = os.getenv("PWD")
     bot.redis = await aioredis.create_redis_pool(url, password=pwd)
-    bot.running_local = LOCALS_IMPORTED
     bot.server_links = SERVER_LINKS
 
     logger.add("exec.log", rotation="1 day", retention="1 week", enqueue=True)

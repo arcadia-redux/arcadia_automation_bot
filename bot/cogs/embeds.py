@@ -21,8 +21,11 @@ def get_image_link(body: str) -> (str, str):
     )
     if result:
         link_structure = result.group(0)
-        extracted_link = link_structure.replace("![image](", "")[:-1]
-        cleaned_body = body.replace(link_structure + "\n", "").replace(link_structure + "\r\n", "")
+        primary_link_start = link_structure.find("(")
+        extracted_link = link_structure[primary_link_start + 1: -1]
+        cleaned_body = body\
+            .replace(link_structure, "[On Thumbnail]")\
+            .replace(link_structure, "[On Thumbnail]")
         return extracted_link, cleaned_body
     return "", body
 

@@ -2,6 +2,7 @@ from discord import Interaction, ButtonStyle
 from discord.ui import button, Button
 
 from .generic import TimeoutView, MultiselectView, TimeoutErasingView, MultiselectDropdown, ActionButton
+from .views_subdata import close_reason_selection, reopen_reason_selection
 from ..cogs.embeds import get_issue_embed
 from ..github_integration import *
 
@@ -142,12 +143,39 @@ class IssueControls(TimeoutView):
 
     async def set_issue_state(self, _button: Button, interaction: Interaction):
         """ Executed by ActionButton callback created and assigned in __init__ """
+        desired_state = "closed" if self.details["state"] == "open" else "open"
+        comment_state = "Closed" if self.details["state"] == "open" else "Reopen"
+        selection = close_reason_selection if self.details["state"] == "open" else reopen_reason_selection
+        reason_view = MultiselectView("Select reason...", selection, max_values=1)
+        msg = await interaction.response.send_message(
+            f"Please select basic reason.\n"
+            f"Issue **won't be {comment_state.lower()}** until you pick one or this message times out (10 minutes)",
+            view=reason_view, ephemeral=True
+        )
+        reason_view.assign_message(msg)
+        timed_out = await reason_view.wait()
+        close_reason = ""
+        if not timed_out:
+            close_reason = reason_view.values[0] + ".\n"
+
+        status, _ = await comment_issue(
+            self.session,
+            self.repo,
+            self.github_id,
+            f"{close_reason}{comment_state} from Discord using Issue Controls button by "
+            f"**{interaction.user.name}#{interaction.user.discriminator}**"
+        )
+
         status, data = await set_issue_state(
-            self.session, self.repo, self.github_id, "closed" if self.details["state"] == "open" else "open"
+            self.session, self.repo, self.github_id, desired_state
         )
 
         _button.style = ButtonStyle.success if data["state"] == "closed" else ButtonStyle.red
         _button.label = "Reopen" if data["state"] == "closed" else "Close"
 
-        await interaction.response.edit_message(content=interaction.message.content, view=self)
         await self._update_details()
+
+    @button(emoji="❎", style=ButtonStyle.danger, row=2)
+    async def cancel_view(self, _button: Button, interaction: Interaction):
+        self.stop()
+        await self.remove_view_from_message()
