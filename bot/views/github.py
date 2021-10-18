@@ -50,7 +50,9 @@ class IssueControls(TimeoutView):
             new_embed = await get_issue_embed(self.session, self.details, self.github_id, self.repo)
 
             if self.assigned_message:
-                await self.assigned_message.edit(content=self.assigned_message.content, embed=new_embed, view=self)
+                self.assigned_message = await self.assigned_message.edit(
+                    content=self.assigned_message.content, embed=new_embed, view=self
+                )
             else:
                 logger.warning(f"_update_details missing assigned message!")
 
