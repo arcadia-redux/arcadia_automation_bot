@@ -2,13 +2,13 @@ import asyncio
 
 from discord import colour, MessageCommand, UserCommand, SlashCommand
 from discord.app import Option
-from discord.app.context import InteractionContext
 from discord.ext import commands, tasks
 
 from .cog_util import *
 from .embeds import *
 from ..github_integration import *
-from ..views.github import IssueControls, IssueCreation
+from ..views.generic import MultiselectView
+from ..views.github import IssueControls
 
 _WarningLabelName: Final[str] = "[Auto] Cleanup warned"
 
@@ -48,8 +48,11 @@ class Github(commands.Cog, name="Github"):
         self.line_pointer_regex = re.compile(r'L\d+')
 
         self.bot.application_command(
-            name="[Github] Make Issue", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
+            name="[GH] Make Issue", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
         )(self.issue_message_command)
+        self.bot.application_command(
+            name="[GH] Make Comment", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
+        )(self.issue_comment_message_command)
 
         self.bot.application_command(
             name="Github Username", cls=UserCommand, guild_ids=[self.bot.target_guild_ids, ]
@@ -62,13 +65,7 @@ class Github(commands.Cog, name="Github"):
     async def issue_message_command(self, context: InteractionContext, message: Message):
         """ Open new GitHub issue, with interactive repo and title selection """
         content = message.content
-        view = IssueCreation(message)
-        msg = await context.respond(f"Specify target repo: ", view=view, ephemeral=True)
-        view.assign_message(msg)
-        timed_out = await view.wait()
-        if timed_out:
-            return
-        selected_repo = preset_repos[view.values[0]]
+        selected_repo = await wait_for_repo_selection(context, message)
 
         await context.followup.send(
             f"{context.author.mention}, please send issue title (as a usual message)", ephemeral=True
@@ -98,6 +95,47 @@ class Github(commands.Cog, name="Github"):
         )
         issue_view.assign_message(msg)
 
+    async def issue_comment_message_command(self, context: InteractionContext, message: Message):
+        selected_repo = await wait_for_repo_selection(context, message)
+        if not selected_repo:
+            return
+
+        status, recent_issues = await get_issues(self.bot.session, selected_repo, 25, "open", 1)
+        if not status:
+            return
+
+        selection_data = [
+            {
+                "name": f"#{issue['number']} : {issue['title'][:90]}",
+                "description": (issue.get("body", "") or "")[:95]  # "body" might be present as a key, but be None
+            } for issue in recent_issues
+        ]
+
+        issues_selection_view = MultiselectView(
+            "Select issue...", selection_data, min_values=1, max_values=1, is_sorted=True
+        )
+        await context.followup.send(f"Select issue from recently opened:", view=issues_selection_view, ephemeral=True)
+        timed_out = await issues_selection_view.wait()
+        if timed_out:
+            return
+
+        # parse out issue number from "name" string
+        target_issue = issues_selection_view.values[0].split(" : ")[0][1:].strip()
+
+        status, comment_data = await comment_issue(
+            self.bot.session, selected_repo, target_issue, comment_wrap_interaction(message.content, context, message)
+        )
+
+        if status:
+            await message.reply(
+                f"{context.author.mention} Successfully added this message as a comment for issue "
+                f"**#{target_issue}** in **{selected_repo}**", mention_author=False
+            )
+        else:
+            await context.followup.send(
+                f"Failed to add this message as a comment, reason:\n{comment_data}", ephemeral=True
+            )
+
     async def issue_slash_command(
             self,
             context: InteractionContext,
@@ -121,7 +159,7 @@ class Github(commands.Cog, name="Github"):
         issue_view = IssueControls(self.bot.session, full_repo_name, details['number'], details)
         await context.respond("Success!", ephemeral=True)
         msg = await context.followup.send(
-            f"{context.author.name} opened issue using slash command", embed=embed, view=issue_view
+            f"{context.author.mention} opened issue using slash command", embed=embed, view=issue_view
         )
         issue_view.assign_message(msg)
 
@@ -460,7 +498,7 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
             count = params[1]
             state = params[2]
             repo = params[4]
-            new_description = await get_issues_list(self.bot.session, repo, state, count, page_number)
+            new_description = await get_issues_list_formatted(self.bot.session, repo, state, count, page_number)
 
             title = f"Issues: {count} {state.capitalize()} in {repo}"
             footer = f"Page: {page_number}"
@@ -575,7 +613,7 @@ description: New description, set from bot
         page = 1
 
         embed = Embed(
-            description=await get_issues_list(context.bot.session, repo, state, count, page),
+            description=await get_issues_list_formatted(context.bot.session, repo, state, count, page),
             timestamp=datetime.utcnow(),
             colour=colour.Color.dark_teal()
         )

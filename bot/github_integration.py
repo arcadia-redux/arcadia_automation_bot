@@ -5,6 +5,7 @@ from typing import Optional, List, Tuple, Union, Dict, Any
 from aiohttp import ClientSession
 from discord import Message, Member
 from discord.ext.commands import Context
+from discord.app.context import InteractionContext
 from loguru import logger
 
 from .enums import ApiRequestKind
@@ -76,6 +77,13 @@ def comment_wrap_contextless(body: str, message: Message, comment_prefix: str = 
     return f"{body if body else ''}\n\n{comment_prefix} from Discord by " \
            f"**{message.author.name}#{message.author.discriminator}**\n" \
            f"Follow the conversation [here]({message.jump_url})"
+
+
+def comment_wrap_interaction(body: str, context: InteractionContext, ref_message: Message,
+                             comment_prefix: str = "Comment") -> str:
+    return f"{body if body else ''}\n\n{comment_prefix} from Discord by " \
+           f"**{context.author.name}#{context.author.discriminator}**\n" \
+           f"Follow the conversation [here]({ref_message.jump_url})"
 
 
 async def github_api_request(session: ClientSession, request_kind: ApiRequestKind, request_path: str,
@@ -168,16 +176,21 @@ async def get_repos(bot) -> str:
     return '\n'.join(repositories)
 
 
-async def get_issues_list(session: ClientSession, repo: str, state: str, count: _Numeric, page: _Numeric) -> str:
-    resp = await session.get(
-        f"{base_api_link}/repos/arcadia-redux/{repo}/issues?per_page={count}&state={state}&page={page}",
-        headers=base_api_headers
+async def get_issues(session: ClientSession, repo: str, count: _Numeric, state: str, page: _Numeric) -> _ApiResponse:
+    return await github_api_request(
+        session, ApiRequestKind.GET,
+        f"/repos/arcadia-redux/{repo}/issues?per_page={count}&state={state}&page={page}",
+        {}
     )
-    if resp.status >= 400:
+
+
+async def get_issues_list_formatted(session: ClientSession, repo: str, state: str, count: _Numeric,
+                                    page: _Numeric) -> str:
+    status, data = await get_issues(session, repo, count, state, page)
+    if not status:
         return ""
-    response = await resp.json()
     description_list = []
-    for issue in response:
+    for issue in data:
         issue_state = "🟢" if issue['state'] == "open" else "🔴"
         description_list.append(
             f"{issue_state} [`#{issue['number']}`]({issue['html_url']}) {issue['title']}"

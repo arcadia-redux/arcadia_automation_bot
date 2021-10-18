@@ -1,13 +1,16 @@
 import io
 from asyncio import TimeoutError
-from typing import Final, List
+from typing import Final, List, Optional
 from uuid import uuid1
 
 from PIL import Image
-from discord import Embed, Message, Reaction
-from discord import File
+from discord import Embed, Message, Reaction, File
+from discord.app.context import InteractionContext
 from discord.ext.commands import Context
 from loguru import logger
+
+from ..github_integration import preset_repos
+from ..views.github import IssueCreation
 
 PAGE_CONTROLS: Final = {"⏮": -1, "⏭": 1}
 
@@ -102,3 +105,13 @@ async def wait_for_reactions(context: Context, ref_message: Message, expected_re
     except TimeoutError:
         await ref_message.delete()
         return False, ""
+
+
+async def wait_for_repo_selection(context: InteractionContext, message: Message) -> Optional[str]:
+    view = IssueCreation(message)
+    msg = await context.respond(f"Specify target repo: ", view=view, ephemeral=True)
+    view.assign_message(msg)
+    timed_out = await view.wait()
+    if timed_out:
+        return None
+    return preset_repos[view.values[0]]
