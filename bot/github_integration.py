@@ -5,7 +5,7 @@ from typing import Optional, List, Tuple, Union, Dict, Any
 from aiohttp import ClientSession
 from discord import Message, Member
 from discord.ext.commands import Context
-from discord.app.context import InteractionContext
+from discord.commands import ApplicationContext
 from loguru import logger
 
 from .enums import ApiRequestKind
@@ -79,7 +79,7 @@ def comment_wrap_contextless(body: str, message: Message, comment_prefix: str = 
            f"Follow the conversation [here]({message.jump_url})"
 
 
-def comment_wrap_interaction(body: str, context: InteractionContext, ref_message: Message,
+def comment_wrap_interaction(body: str, context: ApplicationContext, ref_message: Message,
                              comment_prefix: str = "Comment") -> str:
     return f"{body if body else ''}\n\n{comment_prefix} from Discord by " \
            f"**{context.author.name}#{context.author.discriminator}**\n" \

@@ -1,11 +1,11 @@
 import io
 from asyncio import TimeoutError
-from typing import Final, List, Optional
+from typing import Final, List, Optional, Dict, Any
 from uuid import uuid1
 
 from PIL import Image
 from discord import Embed, Message, Reaction, File
-from discord.app.context import InteractionContext
+from discord.commands import ApplicationContext
 from discord.ext.commands import Context
 from loguru import logger
 
@@ -13,6 +13,17 @@ from ..github_integration import preset_repos
 from ..views.github import IssueCreation
 
 PAGE_CONTROLS: Final = {"⏮": -1, "⏭": 1}
+
+
+SERVER_LINKS = {
+    "CustomHeroClash": "https://traefik-chc.dota2unofficial.com/",
+    "Dota12v12": "https://api.12v12.dota2unofficial.com/",
+    "Overthrow": "https://api.overthrow.dota2unofficial.com/",
+    "WarMasters": "https://api.warmasters.dota2unofficial.com/",
+    "ReVolt": "https://api.revolt.dota2unofficial.com/",
+    "Pathfinders": "https://api.pathfinders.dota2unofficial.com/",
+}
+custom_game_names: Final[Dict[str, Any]] = {key: None for key in SERVER_LINKS.keys()}
 
 
 async def get_argument(context: Context, text: str) -> str:
@@ -107,7 +118,7 @@ async def wait_for_reactions(context: Context, ref_message: Message, expected_re
         return False, ""
 
 
-async def wait_for_repo_selection(context: InteractionContext, message: Message) -> Optional[str]:
+async def wait_for_repo_selection(context: ApplicationContext, message: Message) -> Optional[str]:
     view = IssueCreation(message)
     msg = await context.respond(f"Specify target repo: ", view=view, ephemeral=True)
     view.assign_message(msg)

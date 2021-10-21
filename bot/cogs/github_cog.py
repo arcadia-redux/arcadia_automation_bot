@@ -1,7 +1,7 @@
 import asyncio
 
 from discord import colour, MessageCommand, UserCommand, SlashCommand
-from discord.app import Option
+from discord.commands import Option
 from discord.ext import commands, tasks
 
 from .cog_util import *
@@ -62,7 +62,7 @@ class Github(commands.Cog, name="Github"):
             name="issue", cls=SlashCommand, guild_ids=[self.bot.target_guild_ids, ]
         )(self.issue_slash_command)
 
-    async def issue_message_command(self, context: InteractionContext, message: Message):
+    async def issue_message_command(self, context: ApplicationContext, message: Message):
         """ Open new GitHub issue, with interactive repo and title selection """
         content = message.content
         selected_repo = await wait_for_repo_selection(context, message)
@@ -95,7 +95,7 @@ class Github(commands.Cog, name="Github"):
         )
         issue_view.assign_message(msg)
 
-    async def issue_comment_message_command(self, context: InteractionContext, message: Message):
+    async def issue_comment_message_command(self, context: ApplicationContext, message: Message):
         selected_repo = await wait_for_repo_selection(context, message)
         if not selected_repo:
             return
@@ -138,7 +138,7 @@ class Github(commands.Cog, name="Github"):
 
     async def issue_slash_command(
             self,
-            context: InteractionContext,
+            context: ApplicationContext,
             repo_name: Option(str, "Repository name", choices=list(preset_repos.keys()), required=True),
             title: Option(str, "Issue title", required=True),
             description: Option(str, "Issue description", required=False)
@@ -163,7 +163,7 @@ class Github(commands.Cog, name="Github"):
         )
         issue_view.assign_message(msg)
 
-    async def github_username_user_command(self, context: InteractionContext, member: Member):
+    async def github_username_user_command(self, context: ApplicationContext, member: Member):
         github_name = await self.bot.redis.hget("github_mention", member.mention, encoding="utf8")
         if github_name:
             msg = f"Github username of {member.mention} is **{github_name}**"

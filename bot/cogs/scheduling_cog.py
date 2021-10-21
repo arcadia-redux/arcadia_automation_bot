@@ -3,8 +3,7 @@ from datetime import timedelta
 from apscheduler.jobstores.redis import RedisJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord import MessageCommand, SlashCommand, Bot
-from discord.app import Option
-from discord.app.context import InteractionContext
+from discord.commands import ApplicationContext, Option
 from discord.ext import commands
 
 from .embeds import *
@@ -104,7 +103,7 @@ class SchedulingCog(commands.Cog):
         await context.reply(f"Got it! Will remind you at **{desired_date}**")
 
     async def remind_slash(
-        self, context: InteractionContext,
+        self, context: ApplicationContext,
         interval: Option(
             str,
             "Interval. Example values: 1 week ; 3 days ; 1 hour 25 minutes ; 1.5 hours",
@@ -120,7 +119,7 @@ class SchedulingCog(commands.Cog):
         )
         await context.respond(f"Got it! Will remind you at **{desired_date}**", ephemeral=True)
 
-    async def remind_message_context(self, context: InteractionContext, message: Message):
+    async def remind_message_context(self, context: ApplicationContext, message: Message):
         """ Remind about something after certain interval """
         interval_view = MultiselectView(
             "Select delay...", BASE_INTERVAL_CHOICES, min_values=1, max_values=1, is_sorted=True

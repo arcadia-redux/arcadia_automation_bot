@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import json
 import os
-from typing import Final, Dict, Any
+from typing import Final
 
 from .__load_env import LOCALS_IMPORTED  # True if imported local .env file
 
@@ -14,6 +14,7 @@ from discord.ext import commands, tasks
 from loguru import logger
 
 from .cogs import github_cog, core_cog, scheduling_cog
+from .cogs.cog_util import custom_game_names, SERVER_LINKS
 from .enums import BotState
 from .translator import translate_single, translate
 
@@ -36,17 +37,7 @@ bot.add_cog(github_cog.Github(bot))
 bot.add_cog(scheduling_cog.SchedulingCog(bot))
 bot.add_cog(core_cog.Core(bot))
 
-# ew, hardcode
-SERVER_LINKS = {
-    "CustomHeroClash": "https://traefik-chc.dota2unofficial.com/",
-    "Dota12v12": "https://api.12v12.dota2unofficial.com/",
-    "Overthrow": "https://api.overthrow.dota2unofficial.com/",
-    "WarMasters": "https://api.warmasters.dota2unofficial.com/",
-    "ReVolt": "https://api.revolt.dota2unofficial.com/",
-    "Pathfinders": "https://api.pathfinders.dota2unofficial.com/",
-}
 
-custom_game_names: Final[Dict[str, Any]] = {key: None for key in SERVER_LINKS.keys()}
 bot.report_channels = custom_game_names.copy()
 bot.chat_channels = custom_game_names.copy()
 bot.queued_chat_messages = custom_game_names.copy()
