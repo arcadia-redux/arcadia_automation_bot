@@ -31,7 +31,6 @@ preset_repos = {
     "conquest": "conquest",
     "revolt-web": "revolt-webserver",
     "path": "pathfinder_issues",
-    "pathfinder": "pathfinder",  # main private pathfinder repo
     "dab": "dab"
 }
 

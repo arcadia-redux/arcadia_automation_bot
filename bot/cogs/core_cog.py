@@ -187,25 +187,7 @@ class Core(commands.Cog, name="Core"):
                 incomes["total"] += data["value"] / 100
             else:
                 logger.warning(f"Bad status on income request to {custom_game}:\n{(await resp.json())}")
-        """
-        australian_timezone = pytz.timezone("Etc/GMT+11")
-        midnight_timestamp = datetime.now(australian_timezone).replace(hour=0, minute=0, second=1).timestamp()
-        print(f"{midnight_timestamp=}")
 
-        for custom_game in ["CHC", "Pathfinders", "Dota12v12"]:
-            print(custom_game)
-            incomes[custom_game] = 0
-            result = stripe.BalanceTransaction.list(
-                api_key=getenv(f"STRIPE_{custom_game.upper()}"),
-                created={
-                    "gte": int(midnight_timestamp)
-                }
-            )
-            for transaction_object in result["data"]:
-                print(transaction_object["net"], transaction_object["currency"])
-                incomes[custom_game] += transaction_object["net"] / 100
-                incomes["total"] += transaction_object["net"] / 100
-        """
         message_body = f"""
 All values are in USD.
 

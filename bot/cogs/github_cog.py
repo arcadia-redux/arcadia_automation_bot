@@ -677,7 +677,10 @@ description: New description, set from bot
         if status:
             embed = await get_issue_embed(context.bot.session, details, details["number"], repo)
             issue_view = IssueControls(context.bot.session, repo, details["number"], details)
-            msg = await context.send(embed=embed, view=issue_view)
+            msg = await context.send(
+                "Consider trying slash command via `/issue` - it's much easier to use!",
+                embed=embed, view=issue_view
+            )
             issue_view.assign_message(msg)
         else:
             await context.reply(f"GitHub error occurred:\n{details}.")
