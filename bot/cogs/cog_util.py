@@ -1,6 +1,6 @@
 import io
 from asyncio import TimeoutError
-from typing import Final, List, Optional, Dict, Any
+from typing import Final, List, Optional, Dict, Any, Union
 from uuid import uuid1
 
 from PIL import Image
@@ -8,12 +8,13 @@ from discord import Embed, Message, Reaction, File
 from discord.commands import ApplicationContext
 from discord.ext.commands import Context
 from loguru import logger
+from aiohttp import ClientSession
 
 from ..github_integration import preset_repos
 from ..views.github import IssueCreation
+from .embeds import get_issue_embed
 
 PAGE_CONTROLS: Final = {"⏮": -1, "⏭": 1}
-
 
 SERVER_LINKS = {
     "CustomHeroClash": "https://traefik-chc.dota2unofficial.com/",
@@ -126,3 +127,12 @@ async def wait_for_repo_selection(context: ApplicationContext, message: Message)
     if timed_out:
         return None
     return preset_repos[view.values[0]]
+
+
+async def update_issue_embed(
+        session: ClientSession, message: Message, detail: dict, repo: str, issue_number: Union[str, int]
+) -> Message:
+    new_embed = await get_issue_embed(session, detail, issue_number, repo)
+    return await message.edit(
+        content=message.content, embed=new_embed
+    )

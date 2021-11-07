@@ -10,7 +10,7 @@ from discord.colour import Colour
 from ..github_integration import get_issue_by_number, get_pull_request_by_number
 
 url_regex = re.compile(
-    "(https?:\/\/(.+?\.)?github\.com\/arcadia-redux(\/[A-Za-z0-9\-\._~:\/\?#\[\]@!$&'\(\)\*\+,;\=]*)?)"
+    "(https?:\/\/(.+?\.)?github\.com\/arcadia-redux\/.*\/(issues|pull)\/\d*)"
 )
 
 
@@ -23,8 +23,8 @@ def get_image_link(body: str) -> (str, str):
         link_structure = result.group(0)
         primary_link_start = link_structure.find("(")
         extracted_link = link_structure[primary_link_start + 1: -1]
-        cleaned_body = body\
-            .replace(link_structure, "[On Thumbnail]")\
+        cleaned_body = body \
+            .replace(link_structure, "[On Thumbnail]") \
             .replace(link_structure, "[On Thumbnail]")
         return extracted_link, cleaned_body
     return "", body
@@ -57,7 +57,7 @@ async def parse_markdown(session: ClientSession, text: str, repo_name: str) -> s
         if status:
             issue_state = "🟢" if issue_data['state'] == "open" else "🔴"
             text = text.replace(
-                issue_number, f" {issue_state} [{issue_data['title']}{issue_number}]({issue_data['html_url']})"
+                issue_number, f" {issue_state} [{issue_number} {issue_data['title']}]({issue_data['html_url']})"
             )
     for github_obj in github_obj_links:
         github_obj_link = github_obj[0]
@@ -70,7 +70,7 @@ async def parse_markdown(session: ClientSession, text: str, repo_name: str) -> s
         if status:
             issue_state = "🟢" if obj_data['state'] == "open" else "🔴"
             text = text.replace(
-                github_obj_link, f"{issue_state} [{obj_data['title']} #{obj_data['number']}]({github_obj_link})"
+                github_obj_link, f"{issue_state} [#{obj_data['number']} {obj_data['title']}]({github_obj_link})"
             )
 
     return text.replace("- [x]", "✅").replace("* [x]", "✅").replace("- [ ]", "☐")

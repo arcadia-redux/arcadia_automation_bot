@@ -89,6 +89,7 @@ async def github_api_request(session: ClientSession, request_kind: ApiRequestKin
                              body: Optional[dict] = None) -> _ApiResponse:
     completed_request_path = base_api_link + request_path
     response = await getattr(session, str(request_kind))(completed_request_path, json=body, headers=base_api_headers)
+    # print(response.headers["X-RateLimit-Remaining"], "/", response.headers["X-RateLimit-Limit"])
     return response.status < 400, await response.json()
 
 
@@ -294,6 +295,18 @@ async def comment_issue(session: ClientSession, repo: str, issue_id: _Numeric, b
 async def get_issue_comment(session: ClientSession, repo: str, comment_id: _Numeric) -> _ApiResponse:
     return await github_api_request(
         session, ApiRequestKind.GET, f"/repos/arcadia-redux/{repo}/issues/comments/{comment_id}"
+    )
+
+
+async def get_issue_comments(
+        session: ClientSession, repo: str, issue_number: _Numeric, since: Optional[str] = None
+) -> _ApiResponse:
+    if since:
+        url = f"/repos/arcadia-redux/{repo}/issues/{issue_number}/comments?since={since}"
+    else:
+        url = f"/repos/arcadia-redux/{repo}/issues/{issue_number}/comments"
+    return await github_api_request(
+        session, ApiRequestKind.GET, url
     )
 
 

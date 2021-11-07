@@ -1,9 +1,11 @@
-from discord import Interaction, ButtonStyle
+from datetime import datetime
+
+from discord import Interaction, ButtonStyle, Embed, Colour
 from discord.ui import button, Button
 
 from .generic import TimeoutView, MultiselectView, TimeoutErasingView, MultiselectDropdown, ActionButton
 from .views_subdata import close_reason_selection, reopen_reason_selection
-from ..cogs.embeds import get_issue_embed
+from ..cogs.embeds import get_issue_embed, parse_markdown
 from ..github_integration import *
 
 
@@ -143,6 +145,14 @@ class IssueControls(TimeoutView):
             await set_issue_milestone_raw(self.session, self.repo, self.github_id, selected_milestone_number)
             await self._update_details()
 
+    @button(label="View comments", style=ButtonStyle.green)
+    async def view_comments(self, _button: Button, interaction: Interaction):
+        view = GithubPaginationControls(self.session, self.repo, self.github_id)
+        status, embed = await view.get_embed(interaction)
+        if not status:
+            return
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
     async def set_issue_state(self, _button: Button, interaction: Interaction):
         """ Executed by ActionButton callback created and assigned in __init__ """
         desired_state = "closed" if self.details["state"] == "open" else "open"
@@ -181,3 +191,108 @@ class IssueControls(TimeoutView):
     async def cancel_view(self, _button: Button, interaction: Interaction):
         self.stop()
         await self.remove_view_from_message()
+
+
+class GithubPaginationControls(TimeoutView):
+    def __init__(self, session: ClientSession, repo: str, github_id: Union[str, int]):
+        self.session = session
+        self.repo_name = repo
+        self.github_id = github_id
+        self.details = None
+
+        self.current_page = 0
+        self.pages_dates = [None for _ in range(100)]
+
+        super().__init__()
+
+    @button(emoji="⏮️", style=ButtonStyle.green)
+    async def prev_page(self, _button: Button, interaction: Interaction):
+        if self.current_page == 0:
+            await interaction.response.send_message(f"Reached beginning of the conversation!", ephemeral=True)
+            return
+        self.current_page -= 1
+        status, embed = await self.get_embed(interaction)
+        if not status:
+            return
+        await interaction.response.edit_message(embed=embed)
+
+    @button(emoji="⏭️", style=ButtonStyle.green)
+    async def next_page(self, _button: Button, interaction: Interaction):
+        self.current_page += 1
+        status, embed = await self.get_embed(interaction)
+        if not status:
+            return
+        await interaction.response.edit_message(embed=embed)
+
+    @staticmethod
+    def preprocess_comment_body(comment_body) -> [str, str]:
+        appropriate_lines = []
+        override_author = None
+        for line in comment_body.split("\n"):
+            if "Follow the conversation" in line:
+                continue
+            original_author_quote_start = line.find("from Discord by")
+            if original_author_quote_start != -1:
+                override_author = line[original_author_quote_start + 15:].strip()
+                continue
+            appropriate_lines.append(line)
+        return "\n".join(appropriate_lines), override_author
+
+    async def get_embed(self, interaction: Interaction):
+        since_date = self.pages_dates[self.current_page]
+        status, self.details = await get_issue_comments(
+            self.session, self.repo_name, self.github_id, since_date
+        )
+        if not status:
+            await interaction.response.send_message(f"Github error occurred:\n{self.details}", ephemeral=True)
+            return False, None
+        if len(self.details) <= 0:
+            await interaction.response.send_message(f"No comments for that issue/PR exist yet.", ephemeral=True)
+            return False, None
+        return True, await self.__generate_embed()
+
+    async def __generate_embed(self) -> Embed:
+        embed_body = []
+        current_length = 0
+
+        for comment in self.details:
+            override_author = None
+
+            new_body = comment["body"] or ""
+            if comment['user']['login'] == "ArcadiaReduxAutomation":
+                new_body, override_author = self.preprocess_comment_body(new_body)
+
+            if len(new_body) > 500:
+                new_body = new_body[:1000] + " ..."
+
+            new_body = await parse_markdown(self.session, new_body, self.repo_name)
+
+            created_at_date = datetime.strptime(comment['created_at'], "%Y-%m-%dT%H:%M:%SZ")
+            comment_timestamp = created_at_date.timestamp()
+
+            if override_author:
+                user_link = f"{override_author} via [**{comment['user']['login']}**]({comment['user']['html_url']})"
+            else:
+                user_link = f"[**{comment['user']['login']}**]({comment['user']['html_url']})"
+
+            comment_entry = f"**<t:{int(comment_timestamp)}:R>** " \
+                            f"{user_link}:\n{new_body}\n"
+            comment_entry_len = len(comment_entry)
+            if comment_entry_len + current_length < 2000:
+                current_length += comment_entry_len
+                embed_body.append(
+                    comment_entry
+                )
+            else:
+                self.pages_dates[self.current_page + 1] = comment["created_at"]
+                break
+        embed = Embed(
+            title=f"Page: {self.current_page + 1}",
+            description="\n".join(embed_body),
+            colour=Colour.dark_gold()
+        )
+        embed.set_author(
+            name=f"Comments at #{self.github_id} in {self.repo_name}",
+            url=f"https://github.com/arcadia-redux/{self.repo_name}/issues/{self.github_id}"
+        )
+        return embed

@@ -18,13 +18,9 @@ class Github(commands.Cog, name="Github"):
         self.bot = bot
         self.command_list = [
             [["list", "l"], self._list_issues],
-            [["close", "c"], self._close_issue],
             [["open", "o"], self._open_issue],
             [["edit", "e"], self._edit_issue],
-            [["attach", "at"], self._attach_image],
-            [["comment", "c"], self._comment_issue],
             [["search", "s"], self._search_issues],
-            [["assign", "as"], self._assign_to_issue],
         ]
         self.private_repos = [
             "reVolt", "custom_hero_clash", "chclash_webserver", "war_masters", "revolt-webserver",
@@ -204,7 +200,7 @@ class Github(commands.Cog, name="Github"):
             return
 
         issue_link_split = replied_message.embeds[0].author.url.split("/")
-        issue_id = issue_link_split[-1]
+        issue_number = issue_link_split[-1]
         repo = issue_link_split[-3]
 
         body = message.content
@@ -214,13 +210,13 @@ class Github(commands.Cog, name="Github"):
 
         if "https://steamcommunity.com/profiles/" in replied_message.embeds[0].author.url:
             if reply_command.lower() == "send":
-                await self._send_feedback_reply(message, replied_message, issue_id, message_split[1:])
+                await self._send_feedback_reply(message, replied_message, issue_number, message_split[1:])
             return
 
         callback = self.reply_processors.get(reply_command.lower(), None)
 
         if callback:
-            status = await callback(message, repo, issue_id, args)
+            status = await callback(message, repo, issue_number, args)
         else:
             if message.attachments:
                 body += await process_attachments_contextless(
@@ -230,9 +226,13 @@ class Github(commands.Cog, name="Github"):
             status, _ = await comment_issue(
                 self.bot.session,
                 repo,
-                issue_id,
+                issue_number,
                 comment_wrap_contextless(body, message)
             )
+        if status:
+            issue_req_status, details = await get_issue_by_number(self.bot.session, repo, issue_number)
+            if issue_req_status:
+                await update_issue_embed(self.bot.session, replied_message, details, repo, issue_number)
         await message.add_reaction("✅" if status else "🚫")
 
     async def _reply_assign(self, message: Message, repo: str, issue_id: str, assignees: List[str]) -> bool:
@@ -542,12 +542,8 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
             command_types = """
 ```
 [o] open    - open an issue
-[c] close   - close an issue
 [e] edit    - edit issue' body and title
-[at] attach - attach image to issue (as a comment)
-[c] comment - send comment to issue (any text)
 [l] list    - list of issues in repo (filtered with -all, -open, -closed)
-[as] assign - assign users to specific issue
 [s] search  - search issues using github query syntax
 ```
             """
@@ -630,15 +626,6 @@ description: New description, set from bot
         await asyncio.gather(*[message.add_reaction("⏮"), message.add_reaction("⏭")])
 
     @staticmethod
-    async def _close_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        issue_id = args[1] if args_len > 1 else await get_argument(context, "Waiting for issue id:")
-        status, detail = await set_issue_state(context.bot.session, repo, issue_id)
-        if status:
-            await context.send(f"Successfully closed issue **#{issue_id}** of **{repo}**")
-        else:
-            await context.send(f"GitHub error occurred:\n{detail}")
-
-    @staticmethod
     async def _open_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
         title = args[1] if args_len > 1 else None
         body = args[2] if args_len > 2 else ''
@@ -687,7 +674,7 @@ description: New description, set from bot
 
     @staticmethod
     async def _edit_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        issue_id = args[1] if args_len > 1 else await get_argument(context, "Waiting for issue id:")
+        issue_number = args[1] if args_len > 1 else await get_argument(context, "Waiting for issue number:")
         title = args[2] if args_len > 2 else None
         body = args[3] if args_len > 3 else ''
         if not title:
@@ -698,63 +685,12 @@ description: New description, set from bot
             if '\n' not in argument:
                 argument += '\n'
             title, body = argument.split("\n")
-        status, details = await update_issue_title_and_body(context, repo, title, body, issue_id)
+        status, details = await update_issue_title_and_body(context, repo, title, body, issue_number)
         if status:
-            await context.reply(f"Successfully updated issue #{issue_id}")
+            await context.reply(f"Successfully updated issue #{issue_number}")
+            await update_issue_embed(context.bot.session, context.message, details, repo, issue_number)
         else:
             await context.reply(f"GitHub error occurred:\n{details}")
-
-    @staticmethod
-    async def _attach_image(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        issue_id = args[1] if args_len > 1 else await get_argument(context, "Waiting for issue id:")
-        if context.message.attachments:
-            attachment = context.message.attachments[0]
-        else:
-            message = await context.send("Awaiting for attachment.")
-            try:
-                result = await context.bot.wait_for(
-                    "message",
-                    check=lambda message: message.author == context.message.author and message.attachments,
-                    timeout=120
-                )
-            except TimeoutError:
-                await message.delete()
-                return
-            if not result.attachments:
-                await message.delete()
-                return
-            attachment = result.attachments[0]
-        status, comment_data = await comment_issue(
-            context.bot.session,
-            repo,
-            issue_id,
-            comment_wrap(await process_attachments(context, attachment.url), context)
-        )
-        if status:
-            await context.send(f"Successfully added comment {comment_data['html_url']}")
-        else:
-            await context.send(f"Github error occurred: {comment_data}")
-
-    @staticmethod
-    async def _comment_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        issue_id = args[1] if args_len > 1 else await get_argument(context, "Waiting for issue id:")
-        content = args[2] if args_len > 2 else await get_argument(context, "Waiting for comment text:")
-        status, comment_data = await comment_issue(context.bot.session, repo, issue_id, comment_wrap(content, context))
-        if status:
-            await context.send(f"Successfully added comment {comment_data['html_url']}")
-        else:
-            await context.send(f"Github error occurred: {comment_data}")
-
-    @staticmethod
-    async def _assign_to_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        logger.info("assign called")
-        issue_id = args[1] if args_len > 1 else await get_argument(context, "Waiting for issue id:")
-        assignees = args[2:] if args_len > 2 else (await get_argument(context, "Waiting for assignees: ")).split(" ")
-        status, details = await assign_issue(context.bot.session, repo, issue_id, assignees)
-        if status:
-            await context.send(f"Successfully assigned **{', '.join(assignees)}** to issue **{issue_id}**")
-        else:
-            await context.send(f"Github error occurred:\n```{details}```")
 
     @staticmethod
     async def _search_issues(context: Context, repo: str, args: List[str], args_len: int) -> None:
