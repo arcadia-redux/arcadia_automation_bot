@@ -24,9 +24,9 @@ repositories = []
 preset_repos = {
     "chc": "custom_hero_clash_issues",
     "12v12": "12v12",
-    "ot": "overthrow2",
+    "old_ot": "overthrow2",
+    "ot3": "overthrow_3",
     "revolt": "reVolt",
-    "war": "war_masters",
     "bot": "arcadia_automation_bot",
     "conquest": "conquest",
     "revolt-web": "revolt-webserver",

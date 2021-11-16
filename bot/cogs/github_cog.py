@@ -23,8 +23,8 @@ class Github(commands.Cog, name="Github"):
             [["search", "s"], self._search_issues],
         ]
         self.private_repos = [
-            "reVolt", "custom_hero_clash", "chclash_webserver", "war_masters", "revolt-webserver",
-            "pathfinders", "pathfinders-webserver", "dab", "arcadia_automation_bot"
+            "reVolt", "custom_hero_clash", "chclash_webserver", "revolt-webserver",
+            "pathfinders", "pathfinders-webserver", "dab", "arcadia_automation_bot", "overthrow_3"
         ]
 
         self.reply_processors = {
