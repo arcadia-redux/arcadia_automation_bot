@@ -27,12 +27,19 @@ async def save():
 
 
 async def restore():
-    # TODO: bgsave
-    pass
+    redis = await aioredis.create_redis(
+        getenv("REDIS_URl"), password=getenv("PWD"), encoding="utf8"
+    )
+    executor = redis.multi_exec()
+    with open("save.json", "r") as src:
+        backup_content = json.load(src)
+        for key, values in backup_content.items():
+            print("restoring", key, values)
+            executor.rpush(key, values)
 
 
 def main():
-    asyncio.run(save())
+    asyncio.run(restore())
 
 
 main()

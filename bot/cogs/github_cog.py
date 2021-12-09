@@ -353,7 +353,7 @@ class Github(commands.Cog, name="Github"):
             "attachments": attachments
         }
         result = await self.bot.session.post(
-            "https://traefik-chc.dota2unofficial.com/api/lua/mail/feedback_reply",
+            "https://api.chc.dota2unofficial.com/api/lua/mail/feedback_reply",
             json=mail_data
         )
 
