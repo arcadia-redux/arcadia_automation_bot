@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone, date, time
+from datetime import datetime, timedelta
 from typing import Optional
 
 from croniter import croniter
@@ -7,12 +7,6 @@ from discord.commands import Option, ApplicationContext
 from discord.ext import commands, tasks
 from discord.ext.commands import Context
 from loguru import logger
-from .cog_util import SERVER_LINKS
-
-
-async def is_darklord(context: Context):
-    # darklord user id and mine (for testing purposes)
-    return context.author.id in [857941714299387924, 231999894024486912]
 
 
 class Core(commands.Cog, name="Core"):
@@ -168,37 +162,6 @@ class Core(commands.Cog, name="Core"):
                                        f"to <{context.channel.id}>{context.channel.name}")
             return
         await context.channel.send(f"Something went wrong! Status codes: {state_1}:{state_2}")
-
-    @commands.command()
-    @commands.check(is_darklord)
-    async def income(self, context: Context):
-        incomes = {
-            "total": 0
-        }
-        for custom_game in ["CustomHeroClash", "Dota12v12", "Overthrow", "Pathfinders"]:
-            incomes[custom_game] = 0
-            server_link = SERVER_LINKS[custom_game]
-            resp = await self.bot.session.get(f"{server_link}api/lua/payment/income", json={
-                "custom_game": custom_game
-            })
-            if resp.status < 400:
-                data = await resp.json()
-                incomes[custom_game] += data["value"] / 100
-                incomes["total"] += data["value"] / 100
-            else:
-                logger.warning(f"Bad status on income request to {custom_game}:\n{(await resp.json())}")
-
-        message_body = f"""
-All values are in USD.
-
-Custom Hero Clash: $**{incomes["CustomHeroClash"]}**
-Dota 12v12: $**{incomes["Dota12v12"]}**
-Overthrow: $**{incomes["Overthrow"]}**
-Pathfinders: $**{incomes["Pathfinders"]}**
-
-TOTAL: $**{incomes["total"]}**
-        """
-        await context.author.send(f"Income gatherings:\n{message_body}")
 
     @tasks.loop(minutes=1, reconnect=True)
     async def set_status(self):

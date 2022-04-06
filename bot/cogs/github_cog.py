@@ -173,7 +173,8 @@ class Github(commands.Cog, name="Github"):
         self.repos_stringified_list = await github_init(self.bot)
 
         if not self.bot.running_local:
-            self.scan_old_issues.start()
+            # self.scan_old_issues.start()
+            pass
         else:
             logger.info(f"[Scan] disabled as running on local machine")
 

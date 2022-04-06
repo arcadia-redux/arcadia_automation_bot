@@ -26,12 +26,7 @@ preset_repos = {
     "12v12": "12v12",
     "old_ot": "overthrow2",
     "ot3": "overthrow_3",
-    "revolt": "reVolt",
     "bot": "arcadia_automation_bot",
-    "conquest": "conquest",
-    "revolt-web": "revolt-webserver",
-    "path": "pathfinder_issues",
-    "dab": "dab"
 }
 
 preset_repos_reverse = {value: key for key, value in preset_repos.items()}
