@@ -28,14 +28,15 @@ intents.bans = False
 intents.integrations = False
 intents.webhooks = False
 intents.members = True
+intents.message_content = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 bot.session = aiohttp.ClientSession()
 bot.target_guild_ids = int(os.getenv("INTERACTION_GUILD_TARGET"))
 bot.running_local = LOCALS_IMPORTED
-bot.add_cog(github_cog.Github(bot))
-bot.add_cog(scheduling_cog.SchedulingCog(bot))
-bot.add_cog(core_cog.Core(bot))
+bot.add_cog(github_cog.Github(bot), override=True)
+bot.add_cog(scheduling_cog.SchedulingCog(bot), override=True)
+bot.add_cog(core_cog.Core(bot), override=True)
 
 
 bot.report_channels = custom_game_names.copy()

@@ -21,7 +21,10 @@ async def save():
         if value is not None:
             final_dict[key] = value
         else:
-            final_dict[key] = await redis.lrange(key, 0, 100, encoding="utf8")
+            try:
+                final_dict[key] = await redis.lrange(key, 0, 100, encoding="utf8")
+            except aioredis.errors.ReplyError:
+                print("couldn't save" , key)
     with open("save.json", 'w') as file:
         json.dump(final_dict, file)
 
