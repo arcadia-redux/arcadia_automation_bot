@@ -334,9 +334,9 @@ class Github(commands.Cog, name="Github"):
                 for reward in rewards:
                     value = re.findall(self.numeric_regex, reward)
                     if "glory" in reward and value:
-                        attachments["glory"] = int(value[0])
+                        attachments["glory"] = abs(int(value[0]))
                     if "fortune" in reward and value:
-                        attachments["fortune"] = int(value[0])
+                        attachments["fortune"] = abs(int(value[0]))
                     if "item" in reward:
                         if "items" not in attachments:
                             attachments["items"] = []
