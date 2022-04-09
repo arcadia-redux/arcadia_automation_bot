@@ -3,11 +3,11 @@ from typing import List, Optional, Callable, Union, Awaitable
 
 from discord import Message, SelectOption, Interaction, ButtonStyle
 from discord.errors import NotFound
-from discord.ui import View, Select, Button, button
+from discord.ui import View, Select, Button, InputText, Modal
 from loguru import logger
 
-_Callback = Callable[["MultiselectView"], Union[None, Awaitable[None]]]
 
+_Callback = Callable[["MultiselectView"], Union[None, Awaitable[None]]]
 
 class ActionButton(Button):
     def __init__(self, label: str, style: ButtonStyle):
@@ -121,3 +121,21 @@ class MultiselectView(TimeoutErasingView):
 
     def set_on_complete(self, callback: _Callback):
         self.complete_callback = callback
+
+
+class ModalTextInput(Modal):
+    def __init__(self, title: str, fields: List[InputText]):
+        super().__init__(title=title)
+        for field in fields:
+            self.add_item(field)
+
+        self.__callback = None
+
+    def set_callback(self, callback: Callable):
+        self.__callback = callback
+
+    async def callback(self, interaction: Interaction):
+        if self.__callback:
+            await self.__callback(interaction, {
+                child.label: child.value for child in self.children
+            })

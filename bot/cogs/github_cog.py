@@ -1,13 +1,14 @@
 import asyncio
 
-from discord import colour, MessageCommand, UserCommand, SlashCommand
+from discord import colour, MessageCommand, UserCommand, SlashCommand, InputTextStyle
 from discord.commands import Option
 from discord.ext import commands, tasks
+from discord.ui import InputText
 
 from .cog_util import *
 from .embeds import *
 from ..github_integration import *
-from ..views.generic import MultiselectView
+from ..views.generic import MultiselectView, ModalTextInput
 from ..views.github import IssueControls
 
 _WarningLabelName: Final[str] = "[Auto] Cleanup warned"
@@ -132,12 +133,13 @@ class Github(commands.Cog, name="Github"):
                 f"Failed to add this message as a comment, reason:\n{comment_data}", ephemeral=True
             )
 
+    async def _complete_issue_creation(self):
+        pass
+
     async def issue_slash_command(
             self,
             context: ApplicationContext,
             repo_name: Option(str, "Repository name", choices=list(preset_repos.keys()), required=True),
-            title: Option(str, "Issue title", required=True),
-            description: Option(str, "Issue description", required=False)
     ):
         """ Open new GitHub issue in target repo """
         full_repo_name = preset_repos.get(repo_name, None)
@@ -145,19 +147,28 @@ class Github(commands.Cog, name="Github"):
             await context.respond(f"Unknown repo name. Please use one from slash command choices.", ephemeral=True)
             return
 
-        status, details = await open_issue_contextless(
-            self.bot.session, context.author, full_repo_name, title, description
-        )
-        if not status:
-            await context.respond(f"Error creating issue:\n{details}", ephemeral=True)
-            return
-        embed = await get_issue_embed(self.bot.session, details, details["number"], full_repo_name)
-        issue_view = IssueControls(self.bot.session, full_repo_name, details['number'], details)
-        await context.respond("Success!", ephemeral=True)
-        msg = await context.followup.send(
-            f"{context.author.mention} opened issue using slash command", embed=embed, view=issue_view
-        )
-        issue_view.assign_message(msg)
+        issue_creation_modal = ModalTextInput("Fill issue details", [
+            InputText(label="Title", placeholder="Issue title", required=True, style=InputTextStyle.singleline),
+            InputText(label="Description", placeholder="Issue description", required=False, style=InputTextStyle.long),
+        ])
+
+        @logger.catch
+        async def _complete_issue_creation(modal_context, fields):
+            status, details = await open_issue_contextless(
+                self.bot.session, modal_context.user, full_repo_name, fields["Title"], fields["Description"] or ""
+            )
+            if not status:
+                await modal_context.response.send_message(f"Error creating issue:\n{details}", ephemeral=True)
+                return
+            embed = await get_issue_embed(self.bot.session, details, details["number"], full_repo_name)
+            issue_view = IssueControls(self.bot.session, full_repo_name, details['number'], details)
+            msg = await modal_context.response.send_message(
+                f"{modal_context.user.mention} opened issue using slash command", embed=embed, view=issue_view
+            )
+            issue_view.assign_message(await msg.original_message())
+
+        issue_creation_modal.set_callback(_complete_issue_creation)
+        await context.send_modal(issue_creation_modal)
 
     async def github_username_user_command(self, context: ApplicationContext, member: Member):
         github_name = await self.bot.redis.hget("github_mention", member.mention, encoding="utf8")
