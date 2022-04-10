@@ -1,6 +1,6 @@
 import asyncio
 
-from discord import colour, MessageCommand, UserCommand, SlashCommand, InputTextStyle
+from discord import colour, MessageCommand, UserCommand, SlashCommand, InputTextStyle, Interaction
 from discord.commands import Option
 from discord.ext import commands, tasks
 from discord.ui import InputText
@@ -50,6 +50,9 @@ class Github(commands.Cog, name="Github"):
         self.bot.application_command(
             name="[GH] Make Comment", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
         )(self.issue_comment_message_command)
+        self.bot.application_command(
+            name="Mail reply", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
+        )(self.mail_reply_message_command)
 
         self.bot.application_command(
             name="Github Username", cls=UserCommand, guild_ids=[self.bot.target_guild_ids, ]
@@ -132,9 +135,6 @@ class Github(commands.Cog, name="Github"):
             await context.followup.send(
                 f"Failed to add this message as a comment, reason:\n{comment_data}", ephemeral=True
             )
-
-    async def _complete_issue_creation(self):
-        pass
 
     async def issue_slash_command(
             self,
@@ -323,6 +323,41 @@ class Github(commands.Cog, name="Github"):
         })
         return status
 
+    async def __send_feedback_mail(self, steam_id: str, complete_text_content: str, attachments: dict):
+        mail_data = {
+            "targetSteamId": steam_id,
+            "textContent": complete_text_content,
+            "attachments": attachments
+        }
+        return await self.bot.session.post(
+            "https://api.chc.dota2unofficial.com/api/lua/mail/feedback_reply",
+            json=mail_data
+        )
+
+    async def __add_reply_field(self, embed: Embed, text_content: str, message: Message, mention: str,
+                                jump_url: Optional[str] = None):
+        replies_index, replies_field = next(
+            ((i, item) for i, item in enumerate(embed.fields) if item.name == "Replies"), (None, None)
+        )
+
+        reply_message_partial = (text_content[:20] + '...') if len(text_content) > 20 else text_content
+
+        timestamp = int(datetime.utcnow().timestamp())
+
+        if jump_url:
+            reply_message_link = f"<t:{timestamp}:R> [{mention}: {reply_message_partial}]({jump_url})"
+        else:
+            reply_message_link = f"<t:{timestamp}:R> [Interaction] {mention}: {reply_message_partial}"
+
+        if not replies_field:
+            embed.add_field(name="Replies", value=reply_message_link, inline=False)
+        else:
+            new_value = replies_field.value + f"\n{reply_message_link}"
+            embed.set_field_at(replies_index, name="Replies", value=new_value, inline=False)
+
+        await message.add_reaction("✉️")
+        await message.edit(embed=embed)
+
     async def _send_feedback_reply(self, message: Message, replied_message: Message, steam_id: str, text_content: list):
         feedback_embed = replied_message.embeds[0]
         feedback_text = feedback_embed.description.replace("```", "")
@@ -359,36 +394,60 @@ class Github(commands.Cog, name="Github"):
         final_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
                              f"<br><br>{processed_text_content}"
 
-        mail_data = {
-            "targetSteamId": steam_id,
-            "textContent": final_text_content,
-            "attachments": attachments
-        }
-        result = await self.bot.session.post(
-            "https://api.chc.dota2unofficial.com/api/lua/mail/feedback_reply",
-            json=mail_data
-        )
+        result = await self.__send_feedback_mail(steam_id, final_text_content, attachments)
 
         if result.status < 400:
-            replies_index, replies_field = next(
-                ((i, item) for i, item in enumerate(feedback_embed.fields) if item.name == "Replies"), (None, None)
+            await self.__add_reply_field(
+                feedback_embed, processed_text_content, replied_message,
+                replied_message.author.mention, replied_message.jump_url
             )
-
-            reply_message_partial = (processed_text_content[:20] + '...') if len(
-                processed_text_content) > 20 else processed_text_content
-            timestamp = int(datetime.utcnow().timestamp())
-            reply_message_link = f"<t:{timestamp}:R> [{message.author.name} : {reply_message_partial}]({message.jump_url})"
-            if not replies_field:
-                feedback_embed.add_field(name="Replies", value=reply_message_link, inline=False)
-            else:
-                new_value = replies_field.value + f"\n{reply_message_link}"
-                feedback_embed.set_field_at(replies_index, name="Replies", value=new_value, inline=False)
-
             await message.add_reaction("✅")
-            await replied_message.add_reaction("✉️")
-            await replied_message.edit(embed=feedback_embed)
         else:
             await message.add_reaction("🚫")
+
+    async def mail_reply_message_command(self, context: ApplicationContext, message: Message):
+        if not message.embeds or not message.embeds[0]:
+            return await context.respond("Can't send mail reply to that message.")
+        embed = message.embeds[0]
+        if "https://steamcommunity.com/profiles/" not in embed.author.url:
+            return await context.respond("Can't send mail reply to that message.")
+        steam_id = embed.author.url.split("/")[-1]
+        feedback_text = embed.description.replace("```", "")
+
+        mail_modal = ModalTextInput(title="Fill mail details", fields=[
+            InputText(label="Text", placeholder="Your reply goes here...", style=InputTextStyle.long, required=True),
+            InputText(label="Fortune", required=False, placeholder="0"),
+            InputText(label="Glory", required=False, placeholder="0"),
+            InputText(label="Item", required=False, placeholder="item_name_1"),
+        ])
+
+        async def on_modal_submit(modal_context: Interaction, fields):
+            attachments = {}
+            if fortune := fields.get("Fortune", None):
+                attachments["fortune"] = abs(int(fortune))
+            if glory := fields.get("Glory", None):
+                attachments["glory"] = abs(int(glory))
+            if item := fields.get("Item", None):
+                attachments["items"] = [item.strip(), ]
+
+            complete_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
+                                    f"<br><br>{fields['Text']}"
+
+            result = await self.__send_feedback_mail(steam_id, complete_text_content, attachments)
+            if result.status >= 400:
+                return await modal_context.response.send_message(
+                    f"Failed to send mail.\nRequest status code: {result.status}"
+                )
+            await self.__add_reply_field(
+                embed, fields["Text"], message, context.author.mention
+            )
+            await modal_context.response.send_message(
+                f"Successfully sent mail reply!\nReturn to feedback message: {message.jump_url}",
+                ephemeral=True, delete_after=20
+            )
+
+        mail_modal.set_callback(on_modal_submit)
+        await context.send_modal(mail_modal)
 
     @commands.command()
     async def test_feedback_sending(self, context: Context, steam_id: str, text: str):
