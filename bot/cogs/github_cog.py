@@ -323,14 +323,20 @@ class Github(commands.Cog, name="Github"):
         })
         return status
 
-    async def __send_feedback_mail(self, steam_id: str, complete_text_content: str, attachments: dict):
+    async def __defer_server_link(self, message: Message) -> Optional[str]:
+        for custom_game, m_channel in self.bot.report_channels.items():
+            if not m_channel or message.channel.id != m_channel.id:
+                continue
+            return self.bot.server_links.get(custom_game, None)
+
+    async def __send_feedback_mail(self, steam_id: str, complete_text_content: str, attachments: dict, server_url: str):
         mail_data = {
             "targetSteamId": steam_id,
             "textContent": complete_text_content,
             "attachments": attachments
         }
         return await self.bot.session.post(
-            "https://api.chc.dota2unofficial.com/api/lua/mail/feedback_reply",
+            f"{server_url}api/lua/mail/feedback_reply",
             json=mail_data
         )
 
@@ -392,8 +398,11 @@ class Github(commands.Cog, name="Github"):
 
         final_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
                              f"<br><br>{processed_text_content}"
-
-        result = await self.__send_feedback_mail(steam_id, final_text_content, attachments)
+        server_url = await self.__defer_server_link(replied_message)
+        if not server_url:
+            await message.add_reaction("🚫")
+            return await message.reply(f"Couldn't defer backend URL for this channel.")
+        result = await self.__send_feedback_mail(steam_id, final_text_content, attachments, server_url)
 
         if result.status < 400:
             await self.__add_reply_field(
@@ -406,12 +415,18 @@ class Github(commands.Cog, name="Github"):
 
     async def mail_reply_message_command(self, context: ApplicationContext, message: Message):
         if not message.embeds or not message.embeds[0]:
-            return await context.respond("Can't send mail reply to that message.")
+            return await context.respond("Can't send mail reply to that message.", ephemeral=True, delete_after=10)
         embed = message.embeds[0]
         if "https://steamcommunity.com/profiles/" not in embed.author.url:
-            return await context.respond("Can't send mail reply to that message.")
+            return await context.respond("Can't send mail reply to that message.", ephemeral=True, delete_after=10)
         steam_id = embed.author.url.split("/")[-1]
         feedback_text = embed.description.replace("```", "")
+
+        server_url = await self.__defer_server_link(message)
+        if not server_url:
+            return await context.respond(
+                "Couldn't defer backend server URL for this channel.", ephemeral=True, delete_after=10
+            )
 
         mail_modal = ModalTextInput(title="Fill mail details", fields=[
             InputText(label="Text", placeholder="Your reply goes here...", style=InputTextStyle.long, required=True),
@@ -432,10 +447,10 @@ class Github(commands.Cog, name="Github"):
             complete_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
                                     f"<br><br>{fields['Text']}"
 
-            result = await self.__send_feedback_mail(steam_id, complete_text_content, attachments)
+            result = await self.__send_feedback_mail(steam_id, complete_text_content, attachments, server_url)
             if result.status >= 400:
                 return await modal_context.response.send_message(
-                    f"Failed to send mail.\nRequest status code: {result.status}"
+                    f"Failed to send mail.\nRequest status code: {result.status}", ephemeral=True, delete_after=10
                 )
             await self.__add_reply_field(
                 embed, fields["Text"], message, context.author.mention
