@@ -340,14 +340,13 @@ class Github(commands.Cog, name="Github"):
             ((i, item) for i, item in enumerate(embed.fields) if item.name == "Replies"), (None, None)
         )
 
-        reply_message_partial = (text_content[:20] + '...') if len(text_content) > 20 else text_content
-
         timestamp = int(datetime.utcnow().timestamp())
 
         if jump_url:
+            reply_message_partial = (text_content[:20] + '...') if len(text_content) > 20 else text_content
             reply_message_link = f"<t:{timestamp}:R> [{mention}: {reply_message_partial}]({jump_url})"
         else:
-            reply_message_link = f"<t:{timestamp}:R> [Interaction] {mention}: {reply_message_partial}"
+            reply_message_link = f"<t:{timestamp}:R> [Interaction] {mention}: {text_content}"
 
         if not replies_field:
             embed.add_field(name="Replies", value=reply_message_link, inline=False)
@@ -399,7 +398,7 @@ class Github(commands.Cog, name="Github"):
         if result.status < 400:
             await self.__add_reply_field(
                 feedback_embed, processed_text_content, replied_message,
-                replied_message.author.mention, replied_message.jump_url
+                message.author.mention, message.jump_url
             )
             await message.add_reaction("✅")
         else:

@@ -167,7 +167,7 @@ async def send_suggestion(message: bytes):
     if translated and language != "en" and translated.strip() != text:
         embed.add_field(name=f"Translation from **{language.upper()}**", value=f"```{translated}```")
 
-    await report_channel.send(embed=embed, allowed_mentions=AllowedMentions.none)
+    await report_channel.send(embed=embed, allowed_mentions=AllowedMentions.none())
 
 
 async def queue_chat_message(message: bytes):
