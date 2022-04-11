@@ -11,6 +11,7 @@ import aioredis
 import discord
 from aioredis.pubsub import Receiver
 from discord.ext import commands, tasks
+from discord import AllowedMentions
 from loguru import logger
 
 from .cogs import github_cog, core_cog, scheduling_cog
@@ -28,15 +29,15 @@ intents.bans = False
 intents.integrations = False
 intents.webhooks = False
 intents.members = True
+intents.message_content = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 bot.session = aiohttp.ClientSession()
 bot.target_guild_ids = int(os.getenv("INTERACTION_GUILD_TARGET"))
 bot.running_local = LOCALS_IMPORTED
-bot.add_cog(github_cog.Github(bot))
-bot.add_cog(scheduling_cog.SchedulingCog(bot))
-bot.add_cog(core_cog.Core(bot))
-
+bot.add_cog(github_cog.Github(bot), override=True)
+bot.add_cog(scheduling_cog.SchedulingCog(bot), override=True)
+bot.add_cog(core_cog.Core(bot), override=True)
 
 bot.report_channels = custom_game_names.copy()
 bot.chat_channels = custom_game_names.copy()
@@ -114,7 +115,8 @@ async def list_users(context: commands.Context):
     embeds = {}
     for message in messages:
         users[message.author.id] = message.author.name
-        embeds[message.id] = message.embeds[0].title if message.embeds and message.embeds[0] and message.embeds[0].title else None
+        embeds[message.id] = message.embeds[0].title if message.embeds and message.embeds[0] and message.embeds[
+            0].title else None
     titles = "\n".join([f"{_id}: {title}" for _id, title in embeds.items() if title is not None])
     await context.send(f"""
     Users: {", ".join([f"{_id}:{user}" for _id, user in users.items()])}
@@ -165,7 +167,7 @@ async def send_suggestion(message: bytes):
     if translated and language != "en" and translated.strip() != text:
         embed.add_field(name=f"Translation from **{language.upper()}**", value=f"```{translated}```")
 
-    await report_channel.send(embed=embed)
+    await report_channel.send(embed=embed, allowed_mentions=AllowedMentions.none())
 
 
 async def queue_chat_message(message: bytes):

@@ -17,7 +17,7 @@ from .embeds import get_issue_embed
 PAGE_CONTROLS: Final = {"⏮": -1, "⏭": 1}
 
 SERVER_LINKS = {
-    "CustomHeroClash": "https://traefik-chc.dota2unofficial.com/",
+    "CustomHeroClash": "https://api.chc.dota2unofficial.com/",
     "Dota12v12": "https://api.12v12.dota2unofficial.com/",
     "Overthrow": "https://api.overthrow.dota2unofficial.com/",
     "WarMasters": "https://api.warmasters.dota2unofficial.com/",

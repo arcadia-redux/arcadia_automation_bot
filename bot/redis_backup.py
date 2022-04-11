@@ -21,18 +21,28 @@ async def save():
         if value is not None:
             final_dict[key] = value
         else:
-            final_dict[key] = await redis.lrange(key, 0, 100, encoding="utf8")
+            try:
+                final_dict[key] = await redis.lrange(key, 0, 100, encoding="utf8")
+            except aioredis.errors.ReplyError:
+                print("couldn't save" , key)
     with open("save.json", 'w') as file:
         json.dump(final_dict, file)
 
 
 async def restore():
-    # TODO: bgsave
-    pass
+    redis = await aioredis.create_redis(
+        getenv("REDIS_URl"), password=getenv("PWD"), encoding="utf8"
+    )
+    executor = redis.multi_exec()
+    with open("save.json", "r") as src:
+        backup_content = json.load(src)
+        for key, values in backup_content.items():
+            print("restoring", key, values)
+            executor.rpush(key, values)
 
 
 def main():
-    asyncio.run(save())
+    asyncio.run(restore())
 
 
 main()
