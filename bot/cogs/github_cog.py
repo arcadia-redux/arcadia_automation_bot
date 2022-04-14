@@ -437,12 +437,17 @@ class Github(commands.Cog, name="Github"):
 
         async def on_modal_submit(modal_context: Interaction, fields):
             attachments = {}
+            reply_text = fields["Text"]
+            reward = []
             if fortune := fields.get("Fortune", None):
                 attachments["fortune"] = abs(int(fortune))
+                reward.append(f"{attachments['fortune']} <:fortune:831077783446749194>")
             if glory := fields.get("Glory", None):
                 attachments["glory"] = abs(int(glory))
+                reward.append(f"{attachments['glory']:,} <:glory:964153896341753907>")
             if item := fields.get("Item", None):
                 attachments["items"] = [item.strip(), ]
+                reward.append(f"`{item}`")
 
             complete_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
                                     f"<br><br>{fields['Text']}"
@@ -452,8 +457,11 @@ class Github(commands.Cog, name="Github"):
                 return await modal_context.response.send_message(
                     f"Failed to send mail.\nRequest status code: {result.status}", ephemeral=True, delete_after=10
                 )
+            if reward:
+                reward_string = ",\t".join(reward)
+                reply_text = f"{reply_text}\n**Reward:** {reward_string}"
             await self.__add_reply_field(
-                embed, fields["Text"], message, context.author.mention
+                embed, reply_text, message, context.author.mention
             )
             await modal_context.response.send_message(
                 f"Successfully sent mail reply!\nReturn to feedback message: {message.jump_url}",
