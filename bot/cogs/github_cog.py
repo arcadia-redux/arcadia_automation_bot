@@ -416,6 +416,7 @@ class Github(commands.Cog, name="Github"):
         else:
             await message.add_reaction("🚫")
 
+    @logger.catch
     async def mail_reply_message_command(self, context: ApplicationContext, message: Message):
         if not message.embeds or not message.embeds[0]:
             return await context.respond("Can't send mail reply to that message.", ephemeral=True, delete_after=10)
