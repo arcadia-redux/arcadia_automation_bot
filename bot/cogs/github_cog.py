@@ -337,7 +337,10 @@ class Github(commands.Cog, name="Github"):
         }
         return await self.bot.session.post(
             f"{server_url}api/lua/mail/feedback_reply",
-            json=mail_data
+            json=mail_data,
+            headers={
+                "Dedicated-Server-Key": getenv("DEDICATED_SERVER_KEY", None)
+            }
         )
 
     async def __add_reply_field(self, embed: Embed, text_content: str, message: Message, mention: str,
@@ -458,7 +461,7 @@ class Github(commands.Cog, name="Github"):
                     f"Failed to send mail.\nRequest status code: {result.status}", ephemeral=True, delete_after=10
                 )
             if reward:
-                reward_string = ",\t".join(reward)
+                reward_string = " ".join(reward)
                 reply_text = f"{reply_text}\n**Reward:** {reward_string}"
             await self.__add_reply_field(
                 embed, reply_text, message, context.author.mention
