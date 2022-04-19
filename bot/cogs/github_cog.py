@@ -337,7 +337,10 @@ class Github(commands.Cog, name="Github"):
         }
         return await self.bot.session.post(
             f"{server_url}api/lua/mail/feedback_reply",
-            json=mail_data
+            json=mail_data,
+            headers={
+                "Dedicated-Server-Key": getenv("DEDICATED_SERVER_KEY", None)
+            }
         )
 
     async def __add_reply_field(self, embed: Embed, text_content: str, message: Message, mention: str,
@@ -413,6 +416,7 @@ class Github(commands.Cog, name="Github"):
         else:
             await message.add_reaction("🚫")
 
+    @logger.catch
     async def mail_reply_message_command(self, context: ApplicationContext, message: Message):
         if not message.embeds or not message.embeds[0]:
             return await context.respond("Can't send mail reply to that message.", ephemeral=True, delete_after=10)
@@ -437,12 +441,17 @@ class Github(commands.Cog, name="Github"):
 
         async def on_modal_submit(modal_context: Interaction, fields):
             attachments = {}
+            reply_text = fields["Text"]
+            reward = []
             if fortune := fields.get("Fortune", None):
                 attachments["fortune"] = abs(int(fortune))
+                reward.append(f"{attachments['fortune']} <:fortune:831077783446749194>")
             if glory := fields.get("Glory", None):
                 attachments["glory"] = abs(int(glory))
+                reward.append(f"{attachments['glory']:,} <:glory:964153896341753907>")
             if item := fields.get("Item", None):
                 attachments["items"] = [item.strip(), ]
+                reward.append(f"`{item}`")
 
             complete_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
                                     f"<br><br>{fields['Text']}"
@@ -452,8 +461,11 @@ class Github(commands.Cog, name="Github"):
                 return await modal_context.response.send_message(
                     f"Failed to send mail.\nRequest status code: {result.status}", ephemeral=True, delete_after=10
                 )
+            if reward:
+                reward_string = " ".join(reward)
+                reply_text = f"{reply_text}\n**Reward:** {reward_string}"
             await self.__add_reply_field(
-                embed, fields["Text"], message, context.author.mention
+                embed, reply_text, message, context.author.mention
             )
             await modal_context.response.send_message(
                 f"Successfully sent mail reply!\nReturn to feedback message: {message.jump_url}",
