@@ -13,10 +13,9 @@ base_api_headers = {
     "Accept": "application/vnd.github.v3+json",
 }
 
-
-def get_api_headers():
-    global base_api_headers
-    return base_api_headers
+assignees = [
+    "AnnHuangofNJUST", "PonyashaWright"
+]
 
 
 async def publish_localization_changes(session: ClientSession, redis, data: dict) -> None:
@@ -31,13 +30,15 @@ async def publish_localization_changes(session: ClientSession, redis, data: dict
     if issue_number == -1:
         return
 
-    base_url = data['repo']['base_url']
-    before = data['before']
-    after = data['after']
-    comment_description = f""" 
-@AnnHuangofNJUST @StariyOld, localization changes in diff from [`{before[:6]}`]({base_url}/commits/{before}) to [`{after[:6]}`]({base_url}/commits/{after}) [`+{data['file']['additions']}` / `-{data['file']['deletions']}`]
-Compare changes using [github diff]({data['compare']}#diff-{data['anchor']})
-    """.strip()
+    base_url = data["repo"]["base_url"]
+    before = data["before"]
+    after = data["after"]
+    mentions = " ".join(f"@{name}" for name in assignees)
+    comment_description = f"{mentions} localization changes in diff from " \
+                          f"[`{before[:6]}`]({base_url}/commits/{before}) " \
+                          f"to [`{after[:6]}`]({base_url}/commits/{after}) " \
+                          f"[`+{data['file']['additions']}` / `-{data['file']['deletions']}`] " \
+                          f"Compare changes using [github diff]({data['compare']}#diff-{data['anchor']})"
 
     create_comment_link = f"{data['repo']['url']}/issues/{issue_number}/comments"
     body = {
@@ -74,7 +75,7 @@ async def create_localization_issue(session: ClientSession, repo_link: str) -> i
 
     # Assign translators
     assign_body = {
-        "assignees": ["AnnHuangofNJUST", "StariyOld"]
+        "assignees": assignees
     }
     assign_result = await session.post(
         f"{repo_link}/issues/{issue_id}/assignees",
@@ -85,4 +86,3 @@ async def create_localization_issue(session: ClientSession, repo_link: str) -> i
         logger.warning(f"Assign failed: {await assign_result.json()}")
 
     return issue_id
-

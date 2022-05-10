@@ -24,7 +24,7 @@ async def save():
             try:
                 final_dict[key] = await redis.lrange(key, 0, 100, encoding="utf8")
             except aioredis.errors.ReplyError:
-                print("couldn't save" , key)
+                print("couldn't save", key)
     with open("save.json", 'w') as file:
         json.dump(final_dict, file)
 
