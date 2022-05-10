@@ -187,9 +187,6 @@ async def on_message(message: discord.Message):
         embed = message.embeds[0]
         if not embed.title:
             return
-        title = embed.title.lower()
-        if "main success on" in title or "github actions checks success on" in title:
-            await message.delete()
         return
 
     message_text = message.content
