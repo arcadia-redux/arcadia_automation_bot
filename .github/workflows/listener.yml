@@ -1,11 +1,10 @@
-
-name: Docker Deploy CI/CD
+name: Webhook Listener CI/CD
 
 on:
   push:
     paths:
-      - 'bot/**'
-    branches: 
+      - 'webhook_listener/**'
+    branches:
       - master
   workflow_dispatch:
 
@@ -16,6 +15,4 @@ jobs:
     - uses: actions/checkout@v2
     - name: Store secrets as env
       run: echo '${{ secrets.ENV_PRODUCTION_FILE }}' | base64 -d > common.env
-    - name: Restore GAPI credentials from secrets
-      run: echo '${{ secrets.GAPI_CREDENTIALS }}' | base64 -d > bot/model-hexagon-275312-0204216d9fb1.json
-    - run: docker-compose up -d --build --no-deps discord-bot
+    - run: docker-compose up -d --build --no-deps webhook-listener
