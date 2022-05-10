@@ -2,13 +2,12 @@ version: "3.8"
 
 services:
   discord-bot:
-    container_name: "discord-bot"
     depends_on:
       - redis
     build:
       context: ./
       dockerfile: ./bot/Dockerfile
-    restart: on-failure
+    restart: always
     env_file:
       - common.env
     logging:
@@ -18,11 +17,10 @@ services:
         max-file: "5"
 
   webhook-listener:
-    container_name: "webhook-listener"
     depends_on:
       - redis
     build: ./webhook_listener
-    restart: on-failure
+    restart: always
     env_file:
       - common.env
     ports:
@@ -36,6 +34,7 @@ services:
   redis:
     container_name: "redis"
     image: "redis:alpine"
+    restart: always
     command: redis-server /redis/redis.conf --requirepass $PWD
     env_file:
       - common.env
