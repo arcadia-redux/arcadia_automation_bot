@@ -1,4 +1,5 @@
 # Arcadia Redux Automation  
+[![Bot CI/CD](https://github.com/arcadia-redux/arcadia_automation_bot/actions/workflows/bot_deploy.yml/badge.svg?branch=master)](https://github.com/arcadia-redux/arcadia_automation_bot/actions/workflows/bot_deploy.yml) [![Webhook Listener CI/CD](https://github.com/arcadia-redux/arcadia_automation_bot/actions/workflows/listener.yml/badge.svg?branch=master)](https://github.com/arcadia-redux/arcadia_automation_bot/actions/workflows/listener.yml)
 
 Docker-compose image that contains:
  - Discord bot to relay feedback, sent through Redis pub/sub, manage issues on Github
@@ -22,5 +23,7 @@ GOOGLE_PROJECT_API = # google cloud project name (with translation api enabled, 
 GOOGLE_PROJECT_CREDS_FILENAME = # credentials for that project (something like model-quad-111-222.json)
 ```
 
+Deployment is handled by CI/CD workflows, bot is redeployed on push to master, so most of the time you won't need to do this manually.  
+Changes to `common.env` should be applied to action runner secret.
 ### Running on localhost
 You can run Discord bot locally, for that create `.env` file in `bot` folder. It should contain same set of keys, but values may be different of course (to utilize different bot token for testing purposes, or use local Redis instance)
