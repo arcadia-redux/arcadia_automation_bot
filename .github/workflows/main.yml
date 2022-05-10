@@ -1,0 +1,19 @@
+
+name: Docker Deploy CI/CD
+
+on:
+  push:
+    paths:
+      - 'bot/**'
+    branches: 
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: [ self-hosted, remote-discord-bot ]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Store secrets as env
+      run: echo '${{ secrets.ENV_PRODUCTION_FILE }}' | base64 -d > common.env
+    - run: docker-compose up -d --build --no-deps discord-bot
