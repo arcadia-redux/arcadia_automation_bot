@@ -37,7 +37,7 @@ async def publish_localization_changes(session: ClientSession, redis, data: dict
     comment_description = f"{mentions} localization changes in diff from " \
                           f"[`{before[:6]}`]({base_url}/commits/{before}) " \
                           f"to [`{after[:6]}`]({base_url}/commits/{after}) " \
-                          f"[`+{data['file']['additions']}` / `-{data['file']['deletions']}`] " \
+                          f"[`+{data['file']['additions']}` / `-{data['file']['deletions']}`]\n" \
                           f"Compare changes using [github diff]({data['compare']}#diff-{data['anchor']})"
 
     create_comment_link = f"{data['repo']['url']}/issues/{issue_number}/comments"
