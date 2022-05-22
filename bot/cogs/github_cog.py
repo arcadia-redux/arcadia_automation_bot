@@ -45,11 +45,8 @@ class Github(commands.Cog, name="Github"):
         self.line_pointer_regex = re.compile(r'L\d+')
 
         self.bot.application_command(
-            name="[GH] Make Issue", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
-        )(self.issue_message_command)
-        self.bot.application_command(
-            name="[GH] Make Comment", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
-        )(self.issue_comment_message_command)
+            name="Github render", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
+        )(self.process_github_links)
         self.bot.application_command(
             name="Mail reply", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
         )(self.mail_reply_message_command)
@@ -61,80 +58,6 @@ class Github(commands.Cog, name="Github"):
         self.bot.application_command(
             name="issue", cls=SlashCommand, guild_ids=[self.bot.target_guild_ids, ]
         )(self.issue_slash_command)
-
-    async def issue_message_command(self, context: ApplicationContext, message: Message):
-        """ Open new GitHub issue, with interactive repo and title selection """
-        content = message.content
-        selected_repo = await wait_for_repo_selection(context, message)
-
-        await context.followup.send(
-            f"{context.author.mention}, please send issue title (as a usual message)", ephemeral=True
-        )
-        try:
-            result = await context.bot.wait_for(
-                "message", check=lambda _message: _message.author == context.author, timeout=120
-            )
-            issue_title = result.content.strip()
-            await result.delete()
-        except TimeoutError:
-            issue_title = f"[Automatic title] {context.author.name}#{context.author.discriminator} " \
-                          f"in {context.channel.name}"
-            logger.warning(f"get_argument timed out")
-
-        status, details = await open_issue_contextless(
-            self.bot.session, context.author, selected_repo, issue_title, content
-        )
-
-        if not status:
-            logger.warning(f"github issue: {details}")
-            return
-        embed = await get_issue_embed(self.bot.session, details, details["number"], selected_repo)
-        issue_view = IssueControls(self.bot.session, selected_repo, details["number"], details)
-        msg = await message.reply(
-            f"{context.author.mention} opened issue from this message.", embed=embed, view=issue_view
-        )
-        issue_view.assign_message(msg)
-
-    async def issue_comment_message_command(self, context: ApplicationContext, message: Message):
-        selected_repo = await wait_for_repo_selection(context, message)
-        if not selected_repo:
-            return
-
-        status, recent_issues = await get_issues(self.bot.session, selected_repo, 25, "open", 1)
-        if not status:
-            return
-
-        selection_data = [
-            {
-                "name": f"#{issue['number']} : {issue['title'][:90]}",
-                "description": (issue.get("body", "") or "")[:95]  # "body" might be present as a key, but be None
-            } for issue in recent_issues
-        ]
-
-        issues_selection_view = MultiselectView(
-            "Select issue...", selection_data, min_values=1, max_values=1, is_sorted=True
-        )
-        await context.followup.send(f"Select issue from recently opened:", view=issues_selection_view, ephemeral=True)
-        timed_out = await issues_selection_view.wait()
-        if timed_out:
-            return
-
-        # parse out issue number from "name" string
-        target_issue = issues_selection_view.values[0].split(" : ")[0][1:].strip()
-
-        status, comment_data = await comment_issue(
-            self.bot.session, selected_repo, target_issue, comment_wrap_interaction(message.content, context, message)
-        )
-
-        if status:
-            await message.reply(
-                f"{context.author.mention} Successfully added this message as a comment for issue "
-                f"**#{target_issue}** in **{selected_repo}**", mention_author=False
-            )
-        else:
-            await context.followup.send(
-                f"Failed to add this message as a comment, reason:\n{comment_data}", ephemeral=True
-            )
 
     async def issue_slash_command(
             self,
@@ -193,8 +116,6 @@ class Github(commands.Cog, name="Github"):
     async def on_message(self, message):
         if message.author.bot:
             return
-
-        await self.process_github_links(message)
 
         reference = message.reference
         if not reference:
@@ -532,7 +453,7 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
         embed = get_code_block_embed(extension, resulting_code, repo_name, line_pointers, rest[1:], link)
         await message.reply(embed=embed)
 
-    async def process_github_links(self, message: Message):
+    async def process_github_links(self, context: ApplicationContext, message: Message):
         content = message.content
         links = re.findall(self.url_regex, content)
         links = [link[0] for link in links]
@@ -572,6 +493,7 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
                 view.assign_message(msg)
             else:
                 await message.channel.send(embed=embed)
+        context.respond(f"Found and rendered {len(links)} GitHub links.", ephemeral=True, delete_after=10)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):

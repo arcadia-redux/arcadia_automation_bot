@@ -6,8 +6,8 @@ from discord.errors import NotFound
 from discord.ui import View, Select, Button, InputText, Modal
 from loguru import logger
 
-
 _Callback = Callable[["MultiselectView"], Union[None, Awaitable[None]]]
+
 
 class ActionButton(Button):
     def __init__(self, label: str, style: ButtonStyle):
@@ -70,6 +70,7 @@ class MultiselectDropdown(Select):
         Custom component for flexible multi-select dropdown list.
         Handles min-max, options with description, compliant to discord limits
     """
+
     def __init__(self, placeholder: str, options_base: List[dict], min_values: int = 0, max_values: int = 10,
                  is_sorted: bool = False):
         options = []
