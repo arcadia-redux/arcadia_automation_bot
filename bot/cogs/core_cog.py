@@ -2,19 +2,18 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from croniter import croniter
-from discord import Game, Embed, SlashCommand
+from discord import Game, Embed
 from discord.commands import Option, ApplicationContext
 from discord.ext import commands, tasks
 from discord.ext.commands import Context
 from loguru import logger
 
+from ..constants import TARGET_GUILD_IDS, SERVER_LINKS
+
 
 class Core(commands.Cog, name="Core"):
     def __init__(self, bot):
         self.bot = bot
-        self.bot.application_command(name="tournament", cls=SlashCommand, guild_ids=[self.bot.target_guild_ids, ])(
-            self.tournament_slash
-        )
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -47,7 +46,7 @@ class Core(commands.Cog, name="Core"):
         for custom_game, m_channel in self.bot.chat_channels.items():
             if not m_channel or context.channel.id != m_channel.id:
                 continue
-            target_link = self.bot.server_links.get(custom_game, None)
+            target_link = SERVER_LINKS.get(custom_game, None)
             if not target_link:
                 return
 
@@ -81,7 +80,7 @@ class Core(commands.Cog, name="Core"):
         for custom_game, m_channel in self.bot.chat_channels.items():
             if not m_channel or context.channel.id != m_channel.id:
                 continue
-            target_link = self.bot.server_links.get(custom_game, None)
+            target_link = SERVER_LINKS.get(custom_game, None)
             if not target_link:
                 return
 
@@ -124,6 +123,7 @@ class Core(commands.Cog, name="Core"):
         commands_list = f"\n".join([key.decode("utf-8") for key in keys])
         await context.send(f"Linked commands:\n```{commands_list}```")
 
+    @commands.slash_command(name="tournament", guild_ids=TARGET_GUILD_IDS)
     async def tournament_slash(
             self, context: ApplicationContext,
             state: Option(str, "Tournament state", choices=["on", "off"], required=False)
@@ -146,7 +146,7 @@ class Core(commands.Cog, name="Core"):
     @logger.catch
     async def assign(self, context: Context, custom_game_name: str, ch_type: Optional[str] = "report"):
         if not context.message.author.guild_permissions.administrator:
-            return
+            return await context.reply(f"You don't have permission to perform this action.")
         executor = context.bot.redis.multi_exec()
         executor.set(f"{custom_game_name}-{ch_type}-channel-id", context.channel.id)
         executor.set(f"{custom_game_name}-{ch_type}-channel-name", context.channel.name)

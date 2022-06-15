@@ -1,30 +1,17 @@
 import io
 from asyncio import TimeoutError
-from typing import Final, List, Optional, Dict, Any, Union
+from typing import Final, Union
 from uuid import uuid1
 
 from PIL import Image
-from discord import Embed, Message, Reaction, File
-from discord.commands import ApplicationContext
+from aiohttp import ClientSession
+from discord import Embed, Message, File
 from discord.ext.commands import Context
 from loguru import logger
-from aiohttp import ClientSession
 
-from ..github_integration import preset_repos
-from ..views.github import IssueCreation
 from .embeds import get_issue_embed
 
 PAGE_CONTROLS: Final = {"⏮": -1, "⏭": 1}
-
-SERVER_LINKS = {
-    "CustomHeroClash": "https://api.chc.dota2unofficial.com/",
-    "Dota12v12": "https://api.12v12.dota2unofficial.com/",
-    "Overthrow": "https://api.overthrow.dota2unofficial.com/",
-    "WarMasters": "https://api.warmasters.dota2unofficial.com/",
-    "ReVolt": "https://api.revolt.dota2unofficial.com/",
-    "Pathfinders": "https://api.pathfinders.dota2unofficial.com/",
-}
-custom_game_names: Final[Dict[str, Any]] = {key: None for key in SERVER_LINKS.keys()}
 
 
 async def get_argument(context: Context, text: str) -> str:
@@ -93,40 +80,6 @@ async def process_attachments_contextless(message, session, attachment_url: str,
             await message.delete()
 
     return f"\n![image]({attachment_url})"
-
-
-async def wait_for_reactions(context: Context, ref_message: Message, expected_reactions: List[str]) -> [bool, str]:
-    """
-        waits for specific user to react with one of the reactions on specified message
-        returns flag of success and index of reaction from passed list
-    """
-
-    def reaction_check(reaction: Reaction, user):
-        return user == context.message.author and str(reaction.emoji) in expected_reactions and reaction.count > 1
-
-    try:
-        reaction, user = await context.bot.wait_for(
-            "reaction_add",
-            check=reaction_check,
-            timeout=60
-        )
-        representation = str(reaction.emoji)
-        if representation not in expected_reactions:
-            return False, ""
-        return True, representation
-    except TimeoutError:
-        await ref_message.delete()
-        return False, ""
-
-
-async def wait_for_repo_selection(context: ApplicationContext, message: Message) -> Optional[str]:
-    view = IssueCreation(message)
-    msg = await context.respond(f"Specify target repo: ", view=view, ephemeral=True)
-    view.assign_message(msg)
-    timed_out = await view.wait()
-    if timed_out:
-        return None
-    return preset_repos[view.values[0]]
 
 
 async def update_issue_embed(

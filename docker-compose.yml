@@ -35,7 +35,7 @@ services:
     container_name: "redis"
     image: "redis:alpine"
     restart: always
-    command: redis-server /redis/redis.conf --requirepass $PWD
+    command: redis-server /redis/redis.conf --requirepass 1QHyCTQu20OnMaNzOP8QImk1pMEsWiV/oZleouU4WGA=
     env_file:
       - common.env
     ports:

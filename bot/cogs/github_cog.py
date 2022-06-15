@@ -1,32 +1,19 @@
-import asyncio
-
-from discord import colour, MessageCommand, UserCommand, SlashCommand, InputTextStyle, Interaction
+from discord import colour, InputTextStyle, Interaction, default_permissions
 from discord.commands import Option
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.ui import InputText
 
 from .cog_util import *
 from .embeds import *
+from ..constants import TARGET_GUILD_IDS, DEDICATED_SERVER_KEY, PRESET_REPOSITORIES, PRIVATE_REPOSITORIES, SERVER_LINKS
 from ..github_integration import *
-from ..views.generic import MultiselectView, ModalTextInput
+from ..views.generic import ModalTextInput
 from ..views.github import IssueControls
-
-_WarningLabelName: Final[str] = "[Auto] Cleanup warned"
 
 
 class Github(commands.Cog, name="Github"):
     def __init__(self, bot):
         self.bot = bot
-        self.command_list = [
-            [["list", "l"], self._list_issues],
-            [["open", "o"], self._open_issue],
-            [["edit", "e"], self._edit_issue],
-            [["search", "s"], self._search_issues],
-        ]
-        self.private_repos = [
-            "reVolt", "custom_hero_clash", "chclash_webserver", "revolt-webserver",
-            "pathfinders", "pathfinders-webserver", "dab", "arcadia_automation_bot", "overthrow_3"
-        ]
 
         self.reply_processors = {
             "assign": self._reply_assign,
@@ -37,35 +24,25 @@ class Github(commands.Cog, name="Github"):
             "description": self._reply_description,
         }
 
-        self.repos_stringified_list = ""
         self.url_regex = re.compile(
             r"(https?:\/\/(.+?\.)?github\.com\/arcadia-redux(\/[A-Za-z0-9\-\._~:\/\?#\[\]@!$&'\(\)\*\+,;\=]*)?)"
         )
         self.numeric_regex = re.compile(r'[-+]?\d+')
         self.line_pointer_regex = re.compile(r'L\d+')
 
-        self.bot.application_command(
-            name="Github render", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
-        )(self.process_github_links)
-        self.bot.application_command(
-            name="Mail reply", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
-        )(self.mail_reply_message_command)
-
-        self.bot.application_command(
-            name="Github Username", cls=UserCommand, guild_ids=[self.bot.target_guild_ids, ]
-        )(self.github_username_user_command)
-
-        self.bot.application_command(
-            name="issue", cls=SlashCommand, guild_ids=[self.bot.target_guild_ids, ]
-        )(self.issue_slash_command)
-
+    @commands.slash_command(name="issue", guild_ids=TARGET_GUILD_IDS)
+    @default_permissions(
+        manage_messages=True
+    )
     async def issue_slash_command(
             self,
             context: ApplicationContext,
-            repo_name: Option(str, "Repository name", choices=list(preset_repos.keys()), required=True),
+            repo_name: Option(str, "Repository name", choices=list(PRESET_REPOSITORIES.keys()), required=True),
     ):
-        """ Open new GitHub issue in target repo """
-        full_repo_name = preset_repos.get(repo_name, None)
+        """
+        Open new GitHub issue in target repo
+        """
+        full_repo_name = PRESET_REPOSITORIES.get(repo_name, None)
         if not full_repo_name:
             await context.respond(f"Unknown repo name. Please use one from slash command choices.", ephemeral=True)
             return
@@ -93,24 +70,9 @@ class Github(commands.Cog, name="Github"):
         issue_creation_modal.set_callback(_complete_issue_creation)
         await context.send_modal(issue_creation_modal)
 
-    async def github_username_user_command(self, context: ApplicationContext, member: Member):
-        github_name = await self.bot.redis.hget("github_mention", member.mention, encoding="utf8")
-        if github_name:
-            msg = f"Github username of {member.mention} is **{github_name}**"
-        else:
-            msg = f"No associated Github username for {member.mention} stored!"
-        await context.respond(msg, ephemeral=True)
-
     @commands.Cog.listener()
     async def on_ready(self):
         logger.info("[COG] Github is ready!")
-        self.repos_stringified_list = await github_init(self.bot)
-
-        if not self.bot.running_local:
-            # self.scan_old_issues.start()
-            pass
-        else:
-            logger.info(f"[Scan] disabled as running on local machine")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -248,23 +210,24 @@ class Github(commands.Cog, name="Github"):
         for custom_game, m_channel in self.bot.report_channels.items():
             if not m_channel or message.channel.id != m_channel.id:
                 continue
-            return self.bot.server_links.get(custom_game, None)
+            return SERVER_LINKS.get(custom_game, None)
 
     async def __send_feedback_mail(self, steam_id: str, complete_text_content: str, attachments: dict, server_url: str):
         mail_data = {
-            "targetSteamId": steam_id,
-            "textContent": complete_text_content,
+            "steam_id": steam_id,
+            "text_content": complete_text_content,
             "attachments": attachments
         }
         return await self.bot.session.post(
             f"{server_url}api/lua/mail/feedback_reply",
             json=mail_data,
             headers={
-                "Dedicated-Server-Key": getenv("DEDICATED_SERVER_KEY", None)
+                "Dedicated-Server-Key": DEDICATED_SERVER_KEY
             }
         )
 
-    async def __add_reply_field(self, embed: Embed, text_content: str, message: Message, mention: str,
+    @staticmethod
+    async def __add_reply_field(embed: Embed, text_content: str, message: Message, mention: str,
                                 jump_url: Optional[str] = None):
         replies_index, replies_field = next(
             ((i, item) for i, item in enumerate(embed.fields) if item.name == "Replies"), (None, None)
@@ -288,6 +251,8 @@ class Github(commands.Cog, name="Github"):
         await message.edit(embed=embed)
 
     async def _send_feedback_reply(self, message: Message, replied_message: Message, steam_id: str, text_content: list):
+        if message.author.guild_permissions.manage_messages is False:
+            return await message.reply(f"You don't have enough permission to perform this action.")
         feedback_embed = replied_message.embeds[0]
         feedback_text = feedback_embed.description.replace("```", "")
         processed_text_content = ":".join(text_content).strip()
@@ -309,14 +274,17 @@ class Github(commands.Cog, name="Github"):
                 rewards = rewards_line.split(",")
                 for reward in rewards:
                     value = re.findall(self.numeric_regex, reward)
-                    if "glory" in reward and value:
-                        attachments["glory"] = abs(int(value[0]))
+                    if "currency" in reward and value:
+                        attachments["currency"] = abs(int(value[0]))
                     if "fortune" in reward and value:
                         attachments["fortune"] = abs(int(value[0]))
                     if "item" in reward:
                         if "items" not in attachments:
                             attachments["items"] = []
-                        attachments["items"].append(reward.strip())
+                        attachments["items"].append({
+                            "name": reward.strip(),
+                            "count": 1
+                        })
 
             processed_text_content = "\n".join(resulting_text_lines)
 
@@ -337,7 +305,10 @@ class Github(commands.Cog, name="Github"):
         else:
             await message.add_reaction("🚫")
 
-    @logger.catch
+    @commands.message_command(name="Mail Reply", guild_ids=TARGET_GUILD_IDS)
+    @default_permissions(
+        manage_messages=True
+    )
     async def mail_reply_message_command(self, context: ApplicationContext, message: Message):
         if not message.embeds or not message.embeds[0]:
             return await context.respond("Can't send mail reply to that message.", ephemeral=True, delete_after=10)
@@ -356,7 +327,7 @@ class Github(commands.Cog, name="Github"):
         mail_modal = ModalTextInput(title="Fill mail details", fields=[
             InputText(label="Text", placeholder="Your reply goes here...", style=InputTextStyle.long, required=True),
             InputText(label="Fortune", required=False, placeholder="0"),
-            InputText(label="Glory", required=False, placeholder="0"),
+            InputText(label="Currency", required=False, placeholder="0"),
             InputText(label="Item", required=False, placeholder="item_name_1"),
         ])
 
@@ -367,11 +338,16 @@ class Github(commands.Cog, name="Github"):
             if fortune := fields.get("Fortune", None):
                 attachments["fortune"] = abs(int(fortune))
                 reward.append(f"{attachments['fortune']} <:fortune:831077783446749194>")
-            if glory := fields.get("Glory", None):
-                attachments["glory"] = abs(int(glory))
+            if glory := fields.get("Currency", None):
+                attachments["currency"] = abs(int(glory))
                 reward.append(f"{attachments['glory']:,} <:glory:964153896341753907>")
             if item := fields.get("Item", None):
-                attachments["items"] = [item.strip(), ]
+                attachments["items"] = [
+                    {
+                        "name": item.strip(),
+                        "count": 1
+                    }
+                ]
                 reward.append(f"`{item}`")
 
             complete_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
@@ -436,7 +412,7 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
             extension = ""
         line_pointers = [int(line[1:]) for line in re.findall(self.line_pointer_regex, line_pointers_string)]
 
-        raw_content_response = await self.bot.session.get(raw_link, headers=base_api_headers)
+        raw_content_response = await self.bot.session.get(raw_link, headers=GITHUB_API_HEADERS)
         if raw_content_response.status > 200:
             logger.info(f"{await raw_content_response.text()}")
             return
@@ -453,6 +429,7 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
         embed = get_code_block_embed(extension, resulting_code, repo_name, line_pointers, rest[1:], link)
         await message.reply(embed=embed)
 
+    @commands.message_command(name="GitHub render", guild_ids=TARGET_GUILD_IDS)
     async def process_github_links(self, context: ApplicationContext, message: Message):
         content = message.content
         links = re.findall(self.url_regex, content)
@@ -464,7 +441,7 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
                 await self.process_blob_link(message, link)
                 continue
             repo_name, link_type, object_id = link.split("/")[-3:]
-            if repo_name not in self.private_repos:
+            if repo_name not in PRIVATE_REPOSITORIES:
                 continue
             if "#" in object_id:
                 object_id, link_type, sub_object_id = self.process_object_id(object_id)
@@ -493,35 +470,7 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
                 view.assign_message(msg)
             else:
                 await message.channel.send(embed=embed)
-        context.respond(f"Found and rendered {len(links)} GitHub links.", ephemeral=True, delete_after=10)
-
-    @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
-        if user == self.bot.user or not reaction.message.embeds:
-            return
-        message = reaction.message
-        embed = message.embeds[0]
-        author = embed.author
-
-        if not embed or message.author != self.bot.user:
-            return
-
-        if reaction.emoji not in PAGE_CONTROLS:
-            return
-
-        await message.remove_reaction(reaction.emoji, user)
-
-        params = [param.lower() for param in author.name.split(" ")]
-        if params[0] == "issues:":
-            page_number = int(embed.footer.text.split(" ")[1]) + PAGE_CONTROLS[reaction.emoji]
-            count = params[1]
-            state = params[2]
-            repo = params[4]
-            new_description = await get_issues_list_formatted(self.bot.session, repo, state, count, page_number)
-
-            title = f"Issues: {count} {state.capitalize()} in {repo}"
-            footer = f"Page: {page_number}"
-            await message.edit(embed=update_embed(embed, new_description, title, footer))
+        await context.respond(f"Found and rendered {len(links)} GitHub links.", ephemeral=True, delete_after=10)
 
     @commands.command()
     @commands.has_permissions(manage_messages=True)
@@ -541,36 +490,23 @@ reward: -10000 glory, -1000 fortune, item_conscription_notification
         await context.send(msg)
 
     @commands.command(name="issue", aliases=["i", "issues", "Issues", "I"])
-    async def issue(self, context: commands.Context, *args):
-        if len(args) == 0:
-            embed = Embed(
-                description="Shortcuts are case-insensitive",
-                timestamp=datetime.utcnow(),
-                colour=colour.Color.dark_teal()
-            )
-            shortcuts = "\n".join([f"{key.ljust(10)} => {value}" for key, value in preset_repos.items()])
-            embed.add_field(name="Shortcuts: ", value=f"```{shortcuts}```", inline=False)
-            usage = """
-    `$add_github_name @mention github_username` - assign github name to mentioned user
-    `$github_name @mention` - get assigned github name of mentioned user
-    `$issue [repo name] "[title]" "[description]"` - open shortcut
-    `$issue [command]` - bot guidance
-    `$issue open war "Test" "Test"` - example of full command for issue opening
-            """
-            embed.add_field(name="Usage", value=usage, inline=False)
-            command_types = """
-```
-[o] open    - open an issue
-[e] edit    - edit issue' body and title
-[l] list    - list of issues in repo (filtered with -all, -open, -closed)
-[s] search  - search issues using github query syntax
-```
-            """
-            embed.add_field(name="Command types", value=command_types, inline=False)
-            reply_description = """
-                You can reply to "Opened new issue..." messages from bot to interact with newly opened issue directly.
-                Text is interpreted as comments, image attachments are supported.
-                Also can be used with starting keyword for different actions:
+    async def issue(self, context: commands.Context):
+        embed = Embed(
+            description="Shortcuts are case-insensitive",
+            timestamp=datetime.utcnow(),
+            colour=colour.Color.dark_teal()
+        )
+        shortcuts = "\n".join([f"{key.ljust(10)} => {value}" for key, value in PRESET_REPOSITORIES.items()])
+        embed.add_field(name="Shortcuts: ", value=f"```{shortcuts}```", inline=False)
+        usage = """
+`$add_github_name @mention github_username` - assign github name to mentioned user
+`$github_name @mention` - get assigned github name of mentioned user
+        """
+        embed.add_field(name="Usage", value=usage, inline=False)
+        reply_description = """
+            You can reply to "Opened new issue..." messages from bot to interact with newly opened issue directly.
+            Text is interpreted as comments, image attachments are supported.
+            Also can be used with starting keyword for different actions:
 ```
 label: bug "help wanted" enhancement "under review"
 assign: darklordabc SanctusAnimus ZLOY5
@@ -579,229 +515,6 @@ milestone: new round progress ui  // case insensitive
 title: New title, set from bot
 description: New description, set from bot
 ```
-            """
-            embed.add_field(name="Replying", value=reply_description, inline=False)
-            await context.send(embed=embed)
-            return
-        action = args[0]
-        args = args[1:]
-        await self.handle_bot_command(context, action.lower(), *args)
-
-    @commands.command()
-    async def update_repos(self, context: commands.Context):
-        await github_init(context.bot)
-
-    async def handle_bot_command(self, context, action, *args):
-        args_len = len(args)
-        await context.trigger_typing()
-        repo = None
-        if action in preset_repos:
-            repo = preset_repos[action]
-            action = "open"
-            args = ["", ] + list(args)
-            args_len += 1
-
-        if not repo:
-            if args_len > 0:
-                repo = args[0]
-            else:
-                repo = await get_argument(
-                    context,
-                    f"In which repo? Here's possible ones:\n{self.repos_stringified_list}"
-                )
-            if repo.lower() in preset_repos:
-                repo = preset_repos[repo.lower()]
-        if not repo:
-            return
-        await context.trigger_typing()
-        for aliases, coro in self.command_list:
-            if action in aliases:
-                return await coro(context, repo, args, args_len)
-
-    @staticmethod
-    async def _list_issues(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        state = "open"
-        if '-closed' in args: state = "closed"
-        if '-all' in args: state = "all"
-
-        count = 10
-        page = 1
-
-        embed = Embed(
-            description=await get_issues_list_formatted(context.bot.session, repo, state, count, page),
-            timestamp=datetime.utcnow(),
-            colour=colour.Color.dark_teal()
-        )
-
-        embed.set_author(
-            name=f"Issues: {count} {state.capitalize()} in {repo}",
-            url=f"https://github.com/arcadia-redux/{repo}/issues",
-            icon_url="https://cdn.discordapp.com/attachments/684952282076282882/838854388201553930/123.png"
-        )
-
-        embed.set_footer(text=f"Page: {page}")
-
-        message = await context.send(embed=embed)
-        await asyncio.gather(*[message.add_reaction("⏮"), message.add_reaction("⏭")])
-
-    @staticmethod
-    async def _open_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        title = args[1] if args_len > 1 else None
-        body = args[2] if args_len > 2 else ''
-        if args_len > 3:
-            message = await context.reply(
-                f"Way too much arguments passed! "
-                f"**{args_len - 1} / 2** maximum expected arguments for this command.\n"
-                f"React with ✅ to **proceed**, with 🚫 to **cancel**. Issue creation will be cancelled automatically after 60 seconds.\n"
-                f"_Hint: use \" \" to wrap sentences._"
-            )
-            await asyncio.gather(*[message.add_reaction("✅"), message.add_reaction("🚫")])
-
-            expected_reactions = ["✅", "🚫"]
-            _wait_result, reaction_repr = await wait_for_reactions(context, message, expected_reactions)
-            if not _wait_result or not reaction_repr:
-                await context.message.delete()
-                return
-            if reaction_repr == "🚫":
-                await context.message.delete()
-                await message.delete()
-                return
-            await message.delete()
-
-        if not title:
-            argument = await get_argument(
-                context,
-                f"Waiting for title. You may add description on the new line of the same message."
-            )
-            if '\n' not in argument:
-                argument += '\n '
-            title, body = argument.split("\n")
-        if context.message.attachments:
-            body += await process_attachments(context, context.message.attachments[0].url)
-        status, details = await open_issue(context, repo, title, body)
-
-        if status:
-            embed = await get_issue_embed(context.bot.session, details, details["number"], repo)
-            issue_view = IssueControls(context.bot.session, repo, details["number"], details)
-            msg = await context.send(
-                "Consider trying slash command via `/issue` - it's much easier to use!",
-                embed=embed, view=issue_view
-            )
-            issue_view.assign_message(msg)
-        else:
-            await context.reply(f"GitHub error occurred:\n{details}.")
-
-    @staticmethod
-    async def _edit_issue(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        issue_number = args[1] if args_len > 1 else await get_argument(context, "Waiting for issue number:")
-        title = args[2] if args_len > 2 else None
-        body = args[3] if args_len > 3 else ''
-        if not title:
-            argument = await get_argument(
-                context,
-                f"Waiting for title. You may add description on the new line of the same message."
-            )
-            if '\n' not in argument:
-                argument += '\n'
-            title, body = argument.split("\n")
-        status, details = await update_issue_title_and_body(context, repo, title, body, issue_number)
-        if status:
-            await context.reply(f"Successfully updated issue #{issue_number}")
-            await update_issue_embed(context.bot.session, context.message, details, repo, issue_number)
-        else:
-            await context.reply(f"GitHub error occurred:\n{details}")
-
-    @staticmethod
-    async def _search_issues(context: Context, repo: str, args: List[str], args_len: int) -> None:
-        if args_len > 1:
-            query = " ".join(args[1:])
-        else:
-            query = await get_argument(context, "Waiting for search query:")
-        status, details = await search_issues(context.bot.session, repo, query)
-
-        if not status:
-            await context.send(f"Github error occurred:\n```{details}```")
-            return
-
-        results = details["total_count"]
-        description = []
-        for item in details["items"]:
-            link = f"[`#{item['number']}`]({item['html_url']})"
-            issue_state = "🟢" if item['state'] == "open" else "🔴"
-            description.append(
-                f"{issue_state} {link} {item['title']}"
-            )
-
-        description.append(
-            f"\n[`How to compose queries`](https://docs.github.com/en/github/searching-for-information-on-github/"
-            f"searching-on-github/searching-issues-and-pull-requests#search-only-issues-or-pull-requests)"
-        )
-
-        embed = Embed(
-            title=f"Total search results: {results} {'listing 10' if results > 10 else ''}",
-            description="\n".join(description),
-            timestamp=datetime.utcnow(),
-            colour=colour.Colour.blurple(),
-        )
-        embed.set_author(name=f"Search in {repo}", url=f"https://github.com/arcadia-redux/{repo}")
+        """
+        embed.add_field(name="Replying", value=reply_description, inline=False)
         await context.send(embed=embed)
-
-    async def _search_old_issues_in_repo_with_label(self, repo_name: str, label_name: str):
-        logger.info(f"[Scan] Scanning old issues in {repo_name} / {label_name}")
-        status, data = await search_issues(self.bot.session, repo_name, f"is:open label:{label_name}", per_page=50)
-        if not status:
-            logger.warning(f"[Scan] Issue search failed: {data}")
-            return
-        run_time = datetime.utcnow()
-
-        for issue in data["items"]:
-            await asyncio.sleep(1)
-            issue_number = issue["number"]
-
-            present_labels = [label["name"] for label in issue["labels"]]
-            has_warning_label = _WarningLabelName in present_labels
-
-            last_action_date = issue.get("updated_at", issue["created_at"])
-            updated_at = datetime.strptime(last_action_date, "%Y-%m-%dT%H:%M:%SZ")
-            date_difference = run_time - updated_at
-            if date_difference.days < 7:
-                continue
-
-            if not has_warning_label:
-                logger.info(f"[Scan] Outdated issue {issue_number}, adding label")
-
-                status, _data = await add_labels(
-                    self.bot.session, repo_name, issue_number, [_WarningLabelName, *present_labels]
-                )
-                if not status:
-                    logger.warning(f"[Scan] Error when adding labels to issue {issue_number}, {_data}")
-
-                status, _data = await comment_issue(
-                    self.bot.session, repo_name, issue_number,
-                    f"## Warning  \nThis issue was inactive for **{date_difference.days}** days "
-                    f"with label {label_name}.  "
-                    f"\nIt will be **closed** automatically after **7** days if this issue stays inactive."
-                )
-                if not status:
-                    logger.warning(f"[Scan] Error when adding labels to issue {issue_number}, {_data}")
-            else:
-                status, _data = await set_issue_state(self.bot.session, repo_name, issue_number)
-                if not status:
-                    logger.warning(f"[Scan] Failed to close issue {issue_number} in scan: {_data}")
-
-    @tasks.loop(hours=4, reconnect=True)
-    async def scan_old_issues(self):
-        logger.info("[Scan] Started")
-        for _, repo_name in preset_repos.items():
-            label_exists, _ = await get_repo_single_label(self.bot.session, repo_name, _WarningLabelName)
-
-            if not label_exists:
-                await create_repo_label(
-                    self.bot.session, repo_name, "[Auto] Cleanup warned", "FF4000",
-                    "This issue will be closed soon for inactivity and missing replication"
-                )
-            # github search query doesn't support logical OR for labels, therefore have to iterate over all of them
-            for label_name in ['"unknown cause"', '"needs confirmation"', f'"{_WarningLabelName}"']:
-                await self._search_old_issues_in_repo_with_label(repo_name, label_name)
-                await asyncio.sleep(10)  # solid sleep to ensure we aren't exceeding rate limits
-        logger.info("[Scan] Finished")

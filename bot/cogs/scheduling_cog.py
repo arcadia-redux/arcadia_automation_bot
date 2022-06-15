@@ -1,12 +1,15 @@
 from datetime import timedelta
+from os import getenv
 
 from apscheduler.jobstores.redis import RedisJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from discord import MessageCommand, SlashCommand, Bot
-from discord.commands import ApplicationContext, Option
+from discord import Bot
+from discord.commands import Option
 from discord.ext import commands
+from loguru import logger
 
 from .embeds import *
+from ..constants import TARGET_GUILD_IDS
 from ..github_integration import *
 from ..views.generic import MultiselectView
 
@@ -82,14 +85,6 @@ class SchedulingCog(commands.Cog):
 
         self.scheduler.start()
 
-        self.bot.application_command(
-            name="Remind about this", cls=MessageCommand, guild_ids=[self.bot.target_guild_ids, ]
-        )(self.remind_message_context)
-
-        self.bot.application_command(
-            name="reminder", cls=SlashCommand, guild_ids=[self.bot.target_guild_ids, ]
-        )(self.remind_slash)
-
     @commands.command(name="reminder")
     async def remind_default(self, context: Context, interval: str, description: Optional[str] = None):
         """ Remind about something after certain interval """
@@ -102,6 +97,7 @@ class SchedulingCog(commands.Cog):
 
         await context.reply(f"Got it! Will remind you at **{desired_date}**")
 
+    @commands.slash_command(name="remind", guild_ids=TARGET_GUILD_IDS)
     async def remind_slash(
         self, context: ApplicationContext,
         interval: Option(
@@ -119,6 +115,7 @@ class SchedulingCog(commands.Cog):
         )
         await context.respond(f"Got it! Will remind you at **{desired_date}**", ephemeral=True)
 
+    @commands.message_command(name="Remind about this", guild_ids=TARGET_GUILD_IDS)
     async def remind_message_context(self, context: ApplicationContext, message: Message):
         """ Remind about something after certain interval """
         interval_view = MultiselectView(

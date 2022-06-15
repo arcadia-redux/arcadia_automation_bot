@@ -2,10 +2,12 @@ from datetime import datetime
 
 from discord import Interaction, ButtonStyle, Embed, Colour
 from discord.ui import button, Button
+from loguru import logger
 
 from .generic import TimeoutView, MultiselectView, TimeoutErasingView, MultiselectDropdown, ActionButton
 from .views_subdata import close_reason_selection, reopen_reason_selection
 from ..cogs.embeds import get_issue_embed, parse_markdown
+from ..constants import PRESET_REPOSITORIES, Union
 from ..github_integration import *
 
 
@@ -19,7 +21,7 @@ class IssueCreation(TimeoutErasingView):
             {
                 "name": shortcut,
                 "description": full_name
-            } for shortcut, full_name in preset_repos.items()
+            } for shortcut, full_name in PRESET_REPOSITORIES.items()
         ]
 
         self.add_item(MultiselectDropdown("Select repo...", repos_selection, 1, 1))
@@ -43,8 +45,8 @@ class IssueControls(TimeoutView):
 
     async def _update_details(self):
         """
-            Since any button changes issue data, we should update it after every successful interaction,
-            and update issue embed
+        Since any button changes issue data, we should update it after every successful interaction,
+        and update issue embed
         """
         status, data = await get_issue_by_number(self.session, self.repo, self.github_id)
         if status:
@@ -60,7 +62,9 @@ class IssueControls(TimeoutView):
 
     @button(label="Edit Labels", style=ButtonStyle.green)
     async def edit_labels_action(self, _button: Button, interaction: Interaction):
-        """ Edit labels of an issue, allowing to select from 0 (removing all labels) up to 10. """
+        """
+        Edit labels of an issue, allowing to select from 0 (removing all labels) up to 10.
+        """
         status, data = await get_repo_labels(self.session, self.repo)
         if not status:
             await interaction.response.send_message(f"Error!\n{data}", ephemeral=True)

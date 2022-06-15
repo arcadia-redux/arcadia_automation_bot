@@ -10,7 +10,7 @@ load_dotenv()
 
 async def save():
     redis = await aioredis.create_redis(
-        getenv("REDIS_URl"), password=getenv("PWD"), encoding="utf8"
+        getenv("REDIS_URL"), password=getenv("PWD"), encoding="utf8"
     )
     all_keys = await redis.keys("*")
     all_values = await redis.mget(*all_keys)

@@ -19,7 +19,7 @@ async def translate(input_strings: List[str], target_lang: Optional[str] = "en-U
         request={
             "parent": parent,
             "contents": input_strings,
-            "mime_type": "text/plain",  # mime types: text/plain, text/html
+            "mime_type": "text/plain",
             "target_language_code": target_lang,
         }
     )

@@ -23,7 +23,9 @@ class ActionButton(Button):
 
 
 class TimeoutView(View):
-    """ view, that removes itself from message on timeout, leaving source message intact """
+    """
+    View, that removes itself from message on timeout, leaving source message intact
+    """
     assigned_message = None
 
     complete_callback = None
@@ -52,23 +54,26 @@ class TimeoutView(View):
 
 
 class TimeoutErasingView(TimeoutView):
-    """ view, that removes itself together with source message on timeout """
+    """
+    View, that removes itself together with source message on timeout
+    """
 
     def __init__(self):
         super().__init__()
 
     async def on_timeout(self) -> None:
-        if self.assigned_message:
-            try:
-                await self.assigned_message.delete()
-            except NotFound:
-                logger.warning(f"Tried editing non-existent message in TimeoutErasingView on_timeout")
+        if not self.assigned_message:
+            return
+        try:
+            await self.assigned_message.delete()
+        except NotFound:
+            logger.warning(f"Tried editing non-existent message in TimeoutErasingView on_timeout")
 
 
 class MultiselectDropdown(Select):
     """
-        Custom component for flexible multi-select dropdown list.
-        Handles min-max, options with description, compliant to discord limits
+    Custom component for flexible multi-select dropdown list.
+    Handles min-max, options with description, compliant to discord limits
     """
 
     def __init__(self, placeholder: str, options_base: List[dict], min_values: int = 0, max_values: int = 10,

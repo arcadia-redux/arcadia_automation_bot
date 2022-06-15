@@ -4,7 +4,7 @@ import json
 import os
 from typing import Final
 
-from .__load_env import LOCALS_IMPORTED  # True if imported local .env file
+from .constants import LOCALS_IMPORTED  # True if imported local .env file
 
 import aiohttp
 import aioredis
@@ -15,9 +15,9 @@ from discord import AllowedMentions
 from loguru import logger
 
 from .cogs import github_cog, core_cog, scheduling_cog
-from .cogs.cog_util import custom_game_names, SERVER_LINKS
 from .enums import BotState
 from .translator import translate_single, translate
+from .constants import CUSTOM_GAMES
 
 PREFIX: Final = "$" if not LOCALS_IMPORTED else "%"
 token = os.getenv("BOT_TOKEN", None)
@@ -33,15 +33,14 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 bot.session = aiohttp.ClientSession()
-bot.target_guild_ids = int(os.getenv("INTERACTION_GUILD_TARGET"))
 bot.running_local = LOCALS_IMPORTED
 bot.add_cog(github_cog.Github(bot), override=True)
 bot.add_cog(scheduling_cog.SchedulingCog(bot), override=True)
 bot.add_cog(core_cog.Core(bot), override=True)
 
-bot.report_channels = custom_game_names.copy()
-bot.chat_channels = custom_game_names.copy()
-bot.queued_chat_messages = custom_game_names.copy()
+bot.report_channels = CUSTOM_GAMES.copy()
+bot.chat_channels = CUSTOM_GAMES.copy()
+bot.queued_chat_messages = CUSTOM_GAMES.copy()
 bot.translation_channel = None
 
 webapi_key = os.getenv("WEBAPI_KEY")
@@ -54,11 +53,9 @@ async def on_ready():
     if __BOT_STATE == BotState.SET:
         logger.info(f"Bot is already in state [SET], skipping")
         return
+
     logger.info("[Ready] Started")
-    url = os.getenv("REDIS_URl")
-    pwd = os.getenv("PWD")
-    bot.redis = await aioredis.create_redis_pool(url, password=pwd)
-    bot.server_links = SERVER_LINKS
+    bot.redis = await aioredis.create_redis_pool(os.getenv("REDIS_URL"), password=os.getenv("PWD"))
 
     logger.add("exec.log", rotation="1 day", retention="1 week", enqueue=True)
     logger.add("error.log", rotation="1 day", retention="1 week", enqueue=True, level="ERROR")
@@ -106,22 +103,6 @@ async def on_ready():
 @bot.command()
 async def state(ctx):
     await ctx.send(__BOT_STATE)
-
-
-@bot.command()
-async def list_users(context: commands.Context):
-    messages = await context.channel.history(limit=10).flatten()
-    users = {}
-    embeds = {}
-    for message in messages:
-        users[message.author.id] = message.author.name
-        embeds[message.id] = message.embeds[0].title if message.embeds and message.embeds[0] and message.embeds[
-            0].title else None
-    titles = "\n".join([f"{_id}: {title}" for _id, title in embeds.items() if title is not None])
-    await context.send(f"""
-    Users: {", ".join([f"{_id}:{user}" for _id, user in users.items()])}
-    Embed titles: {titles}
-    """)
 
 
 @logger.catch
