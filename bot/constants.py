@@ -45,6 +45,7 @@ SERVER_LINKS = {
 }
 
 CUSTOM_GAMES: Final[Dict[str, Any]] = {key: None for key in SERVER_LINKS.keys()}
+CUSTOM_GAMES_LIST = list(SERVER_LINKS.keys())
 
 Numeric = Union[str, int]
 ApiResponse = Tuple[bool, Union[dict, list]]

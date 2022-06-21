@@ -274,6 +274,8 @@ class Github(commands.Cog, name="Github"):
                 rewards = rewards_line.split(",")
                 for reward in rewards:
                     value = re.findall(self.numeric_regex, reward)
+                    if "glory" in reward and value:
+                        attachments["currency"] = abs(int(value[0]))
                     if "currency" in reward and value:
                         attachments["currency"] = abs(int(value[0]))
                     if "fortune" in reward and value:
@@ -331,6 +333,7 @@ class Github(commands.Cog, name="Github"):
             InputText(label="Item", required=False, placeholder="item_name_1"),
         ])
 
+        @logger.catch
         async def on_modal_submit(modal_context: Interaction, fields):
             attachments = {}
             reply_text = fields["Text"]
@@ -340,7 +343,7 @@ class Github(commands.Cog, name="Github"):
                 reward.append(f"{attachments['fortune']} <:fortune:831077783446749194>")
             if glory := fields.get("Currency", None):
                 attachments["currency"] = abs(int(glory))
-                reward.append(f"{attachments['glory']:,} <:glory:964153896341753907>")
+                reward.append(f"{attachments['currency']:,} <:glory:964153896341753907>")
             if item := fields.get("Item", None):
                 attachments["items"] = [
                     {
@@ -352,9 +355,9 @@ class Github(commands.Cog, name="Github"):
 
             complete_text_content = f"In response to your feedback message:<br> => {feedback_text}" \
                                     f"<br><br>{fields['Text']}"
-
             result = await self.__send_feedback_mail(steam_id, complete_text_content, attachments, server_url)
             if result.status >= 400:
+                logger.info(f"Error sending mail: {result.status}\n{await result.json()}")
                 return await modal_context.response.send_message(
                     f"Failed to send mail.\nRequest status code: {result.status}", ephemeral=True, delete_after=10
                 )
@@ -388,7 +391,7 @@ Casing of starting keywords is also irrelevant.
 Full example:
 ```
 send: glory to Arstotzka
-reward: -10000 glory, -1000 fortune, item_conscription_notification
+reward: -10000 currency, -1000 fortune, item_conscription_notification
 ```
         """.strip())
 

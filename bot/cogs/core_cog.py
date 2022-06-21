@@ -8,7 +8,7 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Context
 from loguru import logger
 
-from ..constants import TARGET_GUILD_IDS, SERVER_LINKS
+from ..constants import TARGET_GUILD_IDS, SERVER_LINKS, CUSTOM_GAMES_LIST
 
 
 class Core(commands.Cog, name="Core"):
@@ -126,11 +126,13 @@ class Core(commands.Cog, name="Core"):
     @commands.slash_command(name="tournament", guild_ids=TARGET_GUILD_IDS)
     async def tournament_slash(
             self, context: ApplicationContext,
+            custom_game: Option(str, "Custom Game", choices=CUSTOM_GAMES_LIST, required=True),
             state: Option(str, "Tournament state", choices=["on", "off"], required=False)
     ):
         """ Sets or displays State of tournament mode for Custom Hero Clash """
+        key_name = f"tournament-mode-state-{custom_game}"
         if not state:
-            saved_state = await self.bot.redis.get("tournament-mode-state")
+            saved_state = await self.bot.redis.get(key_name)
             if saved_state is None:
                 saved_state = "off"
             else:
@@ -138,7 +140,7 @@ class Core(commands.Cog, name="Core"):
             await context.respond(f"Tournament mode state: **{saved_state}**", ephemeral=True)
             return
         new_state = bytes(state == "on")
-        await self.bot.redis.set("tournament-mode-state", new_state)
+        await self.bot.redis.set(key_name, new_state)
         await context.respond(f"Set tournament mode state to **{state}**", ephemeral=True)
 
     @commands.command()
