@@ -145,3 +145,11 @@ class ModalTextInput(Modal):
             await self.__callback(interaction, {
                 child.label: child.value for child in self.children
             })
+
+
+class URLView(View):
+    def __init__(self):
+        super().__init__()
+
+    def add_url(self, label: str, url: str):
+        self.add_item(Button(label=label, url=url))

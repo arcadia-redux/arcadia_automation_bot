@@ -4,20 +4,20 @@ import json
 import os
 from typing import Final
 
-from .constants import LOCALS_IMPORTED  # True if imported local .env file
-
 import aiohttp
 import aioredis
 import discord
 from aioredis.pubsub import Receiver
-from discord.ext import commands, tasks
 from discord import AllowedMentions
+from discord.ext import commands, tasks
 from loguru import logger
 
 from .cogs import github_cog, core_cog, scheduling_cog
+from .constants import CUSTOM_GAMES
+from .constants import LOCALS_IMPORTED, SERVER_LINKS  # True if imported local .env file
 from .enums import BotState
 from .translator import translate_single, translate
-from .constants import CUSTOM_GAMES
+from .views.generic import URLView
 
 PREFIX: Final = "$" if not LOCALS_IMPORTED else "%"
 token = os.getenv("BOT_TOKEN", None)
@@ -148,7 +148,13 @@ async def send_suggestion(message: bytes):
     if translated and language != "en" and translated.strip() != text:
         embed.add_field(name=f"Translation from **{language.upper()}**", value=f"```{translated}```")
 
-    await report_channel.send(embed=embed, allowed_mentions=AllowedMentions.none())
+    view = URLView()
+    backend_url = SERVER_LINKS.get(custom_game)
+    view.add_url("Player Profile", f"{backend_url}/players/{steam_id}")
+    if match_id := decoded.get("match_id", None):
+        view.add_url("Match", f"{backend_url}/matches/details/{match_id}")
+
+    await report_channel.send(embed=embed, allowed_mentions=AllowedMentions.none(), view=view)
 
 
 async def queue_chat_message(message: bytes):
@@ -201,7 +207,7 @@ async def on_message(message: discord.Message):
                 continue
             # process chat message sending
             # backend_link = "http://127.0.0.1:5000/"
-            resp = await bot.session.post(f"{backend_link}api/lua/match/send_dev_chat_message", json={
+            resp = await bot.session.post(f"{backend_link}/api/lua/match/send_dev_chat_message", json={
                 "steamId": -1,
                 "customGame": custom_game,
                 "steamName": message.author.name,

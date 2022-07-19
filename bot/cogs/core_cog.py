@@ -7,6 +7,7 @@ from discord.commands import Option, ApplicationContext
 from discord.ext import commands, tasks
 from discord.ext.commands import Context
 from loguru import logger
+from ..views.generic import URLView
 
 from ..constants import TARGET_GUILD_IDS, SERVER_LINKS, CUSTOM_GAMES_LIST
 
@@ -65,7 +66,7 @@ class Core(commands.Cog, name="Core"):
                 delta = timedelta(days=7)
 
             resp = await self.bot.session.post(
-                f"{target_link}api/lua/match/mute_player_in_chat",
+                f"{target_link}/api/lua/match/mute_player_in_chat",
                 json={
                     "steamId": str(target_steam_id + 76561197960265728),
                     "until": str(datetime.utcnow() + delta),
@@ -85,7 +86,7 @@ class Core(commands.Cog, name="Core"):
                 return
 
             resp = await self.bot.session.post(
-                f"{target_link}api/lua/match/unmute_player_in_chat",
+                f"{target_link}/api/lua/match/unmute_player_in_chat",
                 json={
                     "steamId": str(target_steam_id + 76561197960265728)
                 }
@@ -170,3 +171,12 @@ class Core(commands.Cog, name="Core"):
         await self.bot.change_presence(activity=Game(
             name=f"UTC: {datetime.utcnow()}"
         ))
+
+    @commands.command()
+    async def test_12(self, context: Context):
+        view = URLView()
+        backend_url = SERVER_LINKS.get("CustomHeroClash")
+        view.add_url("Player Profile", f"{backend_url}/players/76561198132422587")
+        view.add_url("Match", f"{backend_url}/match/details/1")
+
+        await context.reply("Reply with URL view", view=view)

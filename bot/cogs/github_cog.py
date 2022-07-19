@@ -219,7 +219,7 @@ class Github(commands.Cog, name="Github"):
             "attachments": attachments
         }
         return await self.bot.session.post(
-            f"{server_url}api/lua/mail/feedback_reply",
+            f"{server_url}/api/lua/mail/feedback_reply",
             json=mail_data,
             headers={
                 "Dedicated-Server-Key": DEDICATED_SERVER_KEY

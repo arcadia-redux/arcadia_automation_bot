@@ -38,10 +38,10 @@ PRESET_REPOSITORIES = {
 }
 
 SERVER_LINKS = {
-    "CustomHeroClash": "https://api.chc.dota2unofficial.com/",
-    "Dota12v12": "https://api.12v12.dota2unofficial.com/",
-    "Overthrow": "https://api.overthrow.dota2unofficial.com/",
-    "Overthrow3": "https://api.ot3.dota2unofficial.com/",
+    "CustomHeroClash": "https://api.chc.dota2unofficial.com",
+    "Dota12v12": "https://api.12v12.dota2unofficial.com",
+    "Overthrow": "https://api.overthrow.dota2unofficial.com",
+    "Overthrow3": "https://api.ot3.dota2unofficial.com",
 }
 
 CUSTOM_GAMES: Final[Dict[str, Any]] = {key: None for key in SERVER_LINKS.keys()}
