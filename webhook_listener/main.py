@@ -17,7 +17,7 @@ async def github_event_handler(request: web.Request):
     session = request.app["session"]
 
     if data["ref"] != "refs/heads/master" and data["ref"] != "refs/heads/main":
-        return
+        return web.Response(status=200)
 
     sent_data = {
         "repo": {
