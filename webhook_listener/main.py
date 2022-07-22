@@ -56,7 +56,7 @@ async def github_event_handler(request: web.Request):
 
 
 async def init():
-    url = getenv("REDIS_URl")
+    url = getenv("REDIS_URL")
     pwd = getenv("PWD")
 
     app = web.Application()
